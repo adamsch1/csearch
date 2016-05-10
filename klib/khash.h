@@ -194,9 +194,9 @@ static const double __ac_HASH_UPPER = 0.77;
 #define __KHASH_TYPE(name, khkey_t, khval_t) \
 	typedef struct kh_##name##_s { \
 		khint_t n_buckets, size, n_occupied, upper_bound; \
-		khint32_t *flags; \
-		khkey_t *keys; \
-		khval_t *vals; \
+		khint32_t * __restrict flags; \
+		khkey_t * __restrict keys; \
+		khval_t * __restrict vals; \
 	} kh_##name##_t;
 
 #define __KHASH_PROTOTYPES(name, khkey_t, khval_t)	 					\

@@ -56,17 +56,19 @@ int index_writer_init( index_writer_t *self, int maxy, int fd, flush_callback ca
 
 int index_writer_flush( index_writer_t *self ) {
 
+	// Delta encode into this buffer
 	char *p = malloc( kv_size(self->data) * sizeof(uint64_t) * 5 );
 	if( p == NULL ) {
 		return -1;
 	}
 
+	// Isolate starting doc, and compress remaining
 	const uint64_t *source = &kv_A(self->data,0)+1;
 	int rc =vbyte_compress_sorted64( source, p, kv_A( self->data, 0 ), 
 			kv_size( self->data )-1);	
 
+	// This pair holds the term and starting doc id for this chunk
 	dt start_pair = { .term = self->last_pair.term, .doc = kv_A(self->data,0) };
-	printf("G: %d\n", rc );
 	rc = self->callback( &start_pair, p, rc, self->user_data );
 	free(p);
 	return rc;
