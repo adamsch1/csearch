@@ -12,10 +12,19 @@ typedef struct {
 
 typedef struct {
 	FILE *in;
-
 	tupe_t tupe;
-
 } ifile_t;
+
+int ifile_read( ifile_t *file ) {
+	if( fread( &file->tupe, sizeof(tupe_t), 1, file->in) == 0 ) {
+		return 0;
+	}
+	return 1;
+}
+
+void ifile_close( ifile_t *file ) {
+	fclose( file->in );
+}
 
 static inline int compare_ifile( const void *va, const void *vb ) {
 	const ifile_t *a = (ifile_t *)va;
@@ -31,9 +40,6 @@ static inline int compare_ifile( const void *va, const void *vb ) {
 }
 
 static void merge( ifile_t *files, size_t nfiles, FILE *outs) {
-  /* Table representing a permutation of fps,
-     such that cur[ord[0]] is the smallest line
-     and will be next output. */
 	size_t *ord = malloc( nfiles * sizeof( *ord ));
 
   size_t j;
@@ -41,9 +47,9 @@ static void merge( ifile_t *files, size_t nfiles, FILE *outs) {
 
 	// Read in initial tuple for each ifile
 	for( k=0; k<nfiles; k++ ) {
-		if( fread( &files[k].tupe, sizeof(tupe_t), 1, files[k].in) == 0 ) {
+		if( ifile_read( &files[k] ) == 0 ) {
 			// EOF remove file
-			fclose( files[k].in);
+			ifile_close( &files[k] );
 			memmove( &files[k], &files[k+1], nfiles-k-1*sizeof(ifile_t));
 			nfiles--;
 		}
@@ -60,9 +66,9 @@ static void merge( ifile_t *files, size_t nfiles, FILE *outs) {
 
 		fwrite( &f->tupe, sizeof(tupe_t), 1, outs );
 
-		if( fread( &f->tupe, sizeof(tupe_t), 1, f->in ) == 0 ) {
+		if( ifile_read( f ) == 0 ) {
 			// EOF remove file
-			fclose( f->in );
+			ifile_close( f );
 			for( k=1; k<nfiles; ++k ) {
 				if( ord[k] > ord[0]) {
 					--ord[k];
@@ -78,6 +84,7 @@ static void merge( ifile_t *files, size_t nfiles, FILE *outs) {
 			continue;
 		}
 
+		// binary search to relocate 
 		{
 			size_t lo = 1;
 			size_t hi = nfiles;
