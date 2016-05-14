@@ -40,10 +40,9 @@ static inline int compare_ifile( const void *va, const void *vb ) {
 }
 
 static void merge( ifile_t *files, size_t nfiles, FILE *outs) {
-	size_t *ord = malloc( nfiles * sizeof( *ord ));
-
-  size_t j;
   size_t k;
+
+	ifile_t temp;
 
 	// Read in initial tuple for each ifile
 	for( k=0; k<nfiles; k++ ) {
@@ -55,46 +54,31 @@ static void merge( ifile_t *files, size_t nfiles, FILE *outs) {
 		}
 	}
 
-	for( k=0; k<nfiles; ++k ) {
-		ord[k] = k;
-	}
-
 	qsort( files, nfiles, sizeof(ifile_t), compare_ifile ); 
 
 	while( nfiles ) {
-		ifile_t *f = &files[ord[0]];
+		ifile_t *f = &files[0];
 
 		fwrite( &f->tupe, sizeof(tupe_t), 1, outs );
 
 		if( ifile_read( f ) == 0 ) {
-			// EOF remove file
-			ifile_close( f );
-			for( k=1; k<nfiles; ++k ) {
-				if( ord[k] > ord[0]) {
-					--ord[k];
-				}
-			}
+			memcpy(&temp, f, sizeof(*f));
+			memmove( &files[0], &files[1], (nfiles-1)*sizeof(ifile_t));
 			nfiles--;
-			for( k=ord[0]; k<nfiles; ++k ) {
-				files[k] = files[k+1];
-			}
-			for( k=0; k<nfiles; ++k ) {
-				ord[k] = ord[k+1];
-			}
+			memcpy( &files[nfiles], &temp, sizeof(temp));
+			ifile_close( &temp );
 			continue;
-		}
-
-		// binary search to relocate 
-		{
+		} else if( nfiles == 1 ) {
+			continue;
+		}  else  {
 			size_t lo = 1;
 			size_t hi = nfiles;
 			size_t probe = lo;
-			size_t ord0 = ord[0];
 			size_t count_of_smaller_lines;
 
 			while (lo < hi) {
-				int cmp = compare_ifile( &files[ord0], &files[ord[probe]]);
-				if (cmp < 0 || (cmp == 0 && ord0 < ord[probe] ))  {
+				int cmp = compare_ifile( &files[0], &files[probe]);
+				if (cmp < 0 || cmp == 0 )  {
 				  hi = probe;
 				} else {
 				  lo = probe + 1;
@@ -103,9 +87,10 @@ static void merge( ifile_t *files, size_t nfiles, FILE *outs) {
 			}
 
 			count_of_smaller_lines = lo - 1;
-			for (j = 0; j < count_of_smaller_lines; j++)
-			  ord[j] = ord[j + 1];
-			ord[count_of_smaller_lines] = ord0;
+
+			memcpy(&temp, &files[0], sizeof(temp));
+			memmove( &files[0], &files[1], count_of_smaller_lines*sizeof(ifile_t));
+			memcpy( &files[count_of_smaller_lines], &temp, sizeof(temp));
 		}
 
 	}
