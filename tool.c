@@ -58,23 +58,29 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 		}
 	}
 
+	// Sort files
 	qsort( files, nfiles, sizeof(ifile_t), compare_ifile ); 
 
 	while( nfiles ) {
 		ifile_t *f = &files[0];
 
+		// Write lowest tuple to output
 		ifile_write( outs, &f->tupe );
 
+		// Read next tuple for this file
 		if( ifile_read( f ) == 0 ) {
+			// EOF case
 			memcpy(&temp, f, sizeof(*f));
+			// Move above it down one in the array [the delete]
 			memmove( &files[0], &files[1], (nfiles-1)*sizeof(ifile_t));
 			nfiles--;
+			// Copy the dude we just deleted to the end of the array
 			memcpy( &files[nfiles], &temp, sizeof(temp));
 			ifile_close( &temp );
-			continue;
 		} else if( nfiles == 1 ) {
 			continue;
 		}  else  {
+			// Binary search to see where this file should be inserted as it's tupe changed
 			size_t lo = 1;
 			size_t hi = nfiles;
 			size_t probe = lo;
@@ -92,8 +98,11 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 
 			count_of_smaller_lines = lo - 1;
 
+			// Preserve the one we are moving
 			memcpy(&temp, &files[0], sizeof(temp));
+			// Copy everything down up to the point of insertion
 			memmove( &files[0], &files[1], count_of_smaller_lines*sizeof(ifile_t));
+			// Insert or guy
 			memcpy( &files[count_of_smaller_lines], &temp, sizeof(temp));
 		}
 
@@ -142,6 +151,7 @@ int main() {
 	a[2].in = fopen("C","rb");
 
 	merge( a, 3, &outs);
+	ifile_close(&outs);
 }
 
 
