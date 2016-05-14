@@ -26,6 +26,10 @@ void ifile_close( ifile_t *file ) {
 	fclose( file->in );
 }
 
+void ifile_write( ifile_t *file, tupe_t *tupe ) {
+	fwrite( tupe, sizeof(tupe_t), 1, file->in );
+}
+
 static inline int compare_ifile( const void *va, const void *vb ) {
 	const ifile_t *a = (ifile_t *)va;
 	const ifile_t *b = (ifile_t *)vb;
@@ -39,7 +43,7 @@ static inline int compare_ifile( const void *va, const void *vb ) {
 	}
 }
 
-static void merge( ifile_t *files, size_t nfiles, FILE *outs) {
+static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
   size_t k;
 
 	ifile_t temp;
@@ -59,7 +63,7 @@ static void merge( ifile_t *files, size_t nfiles, FILE *outs) {
 	while( nfiles ) {
 		ifile_t *f = &files[0];
 
-		fwrite( &f->tupe, sizeof(tupe_t), 1, outs );
+		ifile_write( outs, &f->tupe );
 
 		if( ifile_read( f ) == 0 ) {
 			memcpy(&temp, f, sizeof(*f));
@@ -124,18 +128,20 @@ void test1(char *name, int step) {
 }
 
 int main() {
-	FILE *outs = fopen("D", "wb");
 
+	ifile_t outs;
 	ifile_t a[3];
 	test1("A", 2);
 	test1("B", 3);
 	test1("C", 4);
 
+	outs.in = fopen("D", "wb");
+
 	a[0].in = fopen("A","rb");
 	a[1].in = fopen("B","rb");
 	a[2].in = fopen("C","rb");
 
-	merge( a, 3, outs);
+	merge( a, 3, &outs);
 }
 
 
