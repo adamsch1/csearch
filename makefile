@@ -37,6 +37,9 @@ all: tool
 	echo "please run unit tests by running the unit executable"
 
 
+toolc:  $(HEADERS) tool.c  $(OBJECTS)
+	$(CC) $(CCFLAGS)  -o tool tool.c  $(OBJECTS) -ISIMDCompressionAndIntersection/include/ SIMDCompressionAndIntersection/libSIMDCompressionAndIntersection.a -Lsimdcomp/libsimdcomp.so.0.0.3
+
 tool:  $(HEADERS) tool.cc  $(OBJECTS)
 	$(CXX) $(CXXFLAGS)  -o tool tool.cc  $(OBJECTS) -ISIMDCompressionAndIntersection/include/ SIMDCompressionAndIntersection/libSIMDCompressionAndIntersection.a
 
