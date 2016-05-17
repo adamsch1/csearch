@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <unistd.h>
+#include <string.h>
 #include "simdcomp/include/simdcomp.h"
 
 typedef struct {
@@ -11,9 +12,29 @@ typedef struct {
 } tupe_t;
 
 typedef struct {
+	uint32_t term;
+	uint32_t doc;
+	uint32_t length;
+} tupe3_t;
+
+typedef struct {
+	uint32_t size;
+	uint32_t cap;
+	uint32_t *buffer;
+} chunk_t;
+
+typedef struct {
 	FILE *in;
 	tupe_t tupe;
+
+	chunk_t chunk;
 } ifile_t;
+
+void ifile_init( ifile_t *file, int cap ) {
+	memset( &file->chunk, 0, sizeof(file->chunk));
+	file->chunk.buffer = malloc((++cap) * sizeof(uint32_t));
+	file->chunk.cap = cap; 
+}
 
 int ifile_read( ifile_t *file ) {
 	if( fread( &file->tupe, sizeof(tupe_t), 1, file->in) == 0 ) {
@@ -26,9 +47,55 @@ void ifile_close( ifile_t *file ) {
 	fclose( file->in );
 }
 
-void ifile_write( ifile_t *file, tupe_t *tupe ) {
-	fwrite( tupe, sizeof(tupe_t), 1, file->in );
+static int uncompress_buffer( uint32_t *datain, int n, uint32_t *backbuffer ) {
+	simdunpack_length((const __m128i *)datain, n, backbuffer, n); 
+	return 0;
 }
+
+static int compress_buffer( uint32_t *datain, int n, uint32_t *outbuffer, int *outsize ) {
+	uint32_t b;
+  __m128i * endofbuf;
+
+	b = maxbits_length( datain, n );
+  endofbuf= simdpack_length(datain, n, (__m128i *)outbuffer, b);
+	*outsize = (endofbuf-(__m128i *)outbuffer)*sizeof(__m128i);
+	return 0;
+}
+
+
+uint32_t * chunk_buffer( chunk_t *chunk ) {
+	return chunk->buffer;
+}
+
+int chunk_size( chunk_t *chunk ) {
+	return chunk->size;
+}
+
+int chunk_push( chunk_t *chunk, tupe_t *tupe ) {
+	if( chunk->size == 0 ) {
+		chunk->buffer[ chunk->size++ ] = tupe->term;
+	} 
+	chunk->buffer[ chunk->size++ ] = tupe->doc;
+
+	return chunk->size >= chunk->cap;
+}
+
+void ifile_write( ifile_t *file, tupe_t *tupe ) {
+
+	if( chunk_push( &file->chunk, tupe ) == 1  ) {
+		int outsize = chunk_size( &file->chunk ) * sizeof(uint32_t); 
+		uint32_t *cbuffer = (uint32_t *)malloc( outsize );
+		compress_buffer( chunk_buffer( &file->chunk), chunk_size( &file->chunk ), cbuffer, &outsize );
+		printf("Compression: %d\n", outsize );
+		free(cbuffer);
+		file->chunk.size = 0;
+	} else {
+	}
+
+	fwrite( tupe, sizeof(tupe_t), 1, file->in );
+
+}
+
 
 static inline int compare_ifile( const void *va, const void *vb ) {
 	const ifile_t *a = (ifile_t *)va;
@@ -65,6 +132,7 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 		ifile_t *f = &files[0];
 
 		// Write lowest tuple to output
+		printf("%d\n", f->tupe.doc );
 		ifile_write( outs, &f->tupe );
 
 		// Read next tuple for this file
@@ -109,21 +177,6 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 	}
 }
 
-/*
-static int uncompress_buffer( uint32_t *datain, int n, uint32_t *backbuffer ) {
-	simdunpack_length((const __m128i *)datain, n, backbuffer, n); 
-	return 0;
-}
-
-static int compress_buffer( uint32_t *datain, int n, uint32_t *outbuffer, int *outsize ) {
-	uint32_t b;
-  __m128i * endofbuf;
-
-	b = maxbits_length( datain, n );
-  endofbuf= simdpack_length(datain, n, (__m128i *)outbuffer, b);
-	*outsize = (endofbuf-(__m128i *)outbuffer)*sizeof(__m128i);
-	return 0;
-}*/
 
 void test1(char *name, int step) {
 	FILE * a = fopen(name, "wb");
@@ -140,6 +193,9 @@ int main() {
 
 	ifile_t outs;
 	ifile_t a[3];
+
+	ifile_init( &outs, 10 );
+	outs.chunk.cap = 10;
 	test1("A", 2);
 	test1("B", 3);
 	test1("C", 4);
@@ -150,6 +206,7 @@ int main() {
 	a[1].in = fopen("B","rb");
 	a[2].in = fopen("C","rb");
 
+	printf("OK\n");
 	merge( a, 3, &outs);
 	ifile_close(&outs);
 }
