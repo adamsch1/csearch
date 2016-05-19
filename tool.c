@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <string.h>
-#include "simdcomp/include/simdcomp.h"
+#include "streamvbytedelta.h"
 
 typedef struct {
 	uint32_t term;
@@ -23,46 +23,6 @@ typedef struct {
 	uint32_t *buffer;
 } chunk_t;
 
-typedef struct {
-	FILE *in;
-	tupe_t tupe;
-
-	chunk_t chunk;
-} ifile_t;
-
-void ifile_init( ifile_t *file, int cap ) {
-	memset( &file->chunk, 0, sizeof(file->chunk));
-	file->chunk.buffer = malloc((++cap) * sizeof(uint32_t));
-	file->chunk.cap = cap; 
-}
-
-int ifile_read( ifile_t *file ) {
-	if( fread( &file->tupe, sizeof(tupe_t), 1, file->in) == 0 ) {
-		return 0;
-	}
-	return 1;
-}
-
-void ifile_close( ifile_t *file ) {
-	fclose( file->in );
-}
-
-static int uncompress_buffer( uint32_t *datain, int n, uint32_t *backbuffer ) {
-	simdunpack_length((const __m128i *)datain, n, backbuffer, n); 
-	return 0;
-}
-
-static int compress_buffer( uint32_t *datain, int n, uint32_t *outbuffer, int *outsize ) {
-	uint32_t b;
-  __m128i * endofbuf;
-
-	b = maxbits_length( datain, n );
-  endofbuf= simdpack_length(datain, n, (__m128i *)outbuffer, b);
-	*outsize = (endofbuf-(__m128i *)outbuffer)*sizeof(__m128i);
-	return 0;
-}
-
-
 uint32_t * chunk_buffer( chunk_t *chunk ) {
 	return chunk->buffer;
 }
@@ -80,22 +40,54 @@ int chunk_push( chunk_t *chunk, tupe_t *tupe ) {
 	return chunk->size >= chunk->cap;
 }
 
+void chunk_alloc( chunk_t *chunk, size_t size ) {
+	chunk->buffer = malloc( sizeof(uint32_t) * size );
+	chunk->cap = size;
+}
+
+typedef struct {
+	FILE *in;
+	tupe_t tupe;
+
+	chunk_t chunk;
+} ifile_t;
+
+void ifile_init( ifile_t *file, int cap ) {
+	memset( &file->chunk, 0, sizeof(file->chunk));
+
+	chunk_alloc( &file->chunk, cap );
+}
+
+int ifile_read( ifile_t *file ) {
+	if( fread( &file->tupe, sizeof(tupe_t), 1, file->in) == 0 ) {
+		return 0;
+	}
+	return 1;
+}
+
+void ifile_close( ifile_t *file ) {
+	fclose( file->in );
+}
+
+
+void ifile_real_write( ifile_t *file ) {
+	uint8_t *cbuffer = malloc( chunk_size(&file->chunk) * sizeof(uint32_t));
+	size_t csize = streamvbyte_delta_encode( chunk_buffer( &file->chunk ), chunk_size( &file->chunk), cbuffer, 0 );
+
+	fwrite( &csize, sizeof(csize), 1, file->in );
+	fwrite( cbuffer, csize, 1, file->in );
+
+	free( cbuffer );
+}
+
 void ifile_write( ifile_t *file, tupe_t *tupe ) {
 
 	if( chunk_push( &file->chunk, tupe ) == 1  ) {
-		int outsize = chunk_size( &file->chunk ) * sizeof(uint32_t); 
-		uint32_t *cbuffer = (uint32_t *)malloc( outsize );
-		compress_buffer( chunk_buffer( &file->chunk), chunk_size( &file->chunk ), cbuffer, &outsize );
-		printf("Compression: %d\n", outsize );
-		free(cbuffer);
+		ifile_real_write( file );
 		file->chunk.size = 0;
-	} else {
 	}
 
-	fwrite( tupe, sizeof(tupe_t), 1, file->in );
-
 }
-
 
 static inline int compare_ifile( const void *va, const void *vb ) {
 	const ifile_t *a = (ifile_t *)va;
