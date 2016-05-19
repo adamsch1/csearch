@@ -31,13 +31,18 @@ int chunk_size( chunk_t *chunk ) {
 	return chunk->size;
 }
 
+int chunk_full( chunk_t *chunk ) {
+	return chunk->size == chunk->cap;
+}
+
 int chunk_push( chunk_t *chunk, tupe_t *tupe ) {
-	if( chunk->size == 0 ) {
-		chunk->buffer[ chunk->size++ ] = tupe->term;
-	} 
 	chunk->buffer[ chunk->size++ ] = tupe->doc;
 
 	return chunk->size >= chunk->cap;
+}
+
+uint32_t chunk_get( chunk_t *chunk ) {
+	return chunk->buffer[ chunk->size++];
 }
 
 void chunk_alloc( chunk_t *chunk, size_t size ) {
@@ -46,22 +51,57 @@ void chunk_alloc( chunk_t *chunk, size_t size ) {
 }
 
 typedef struct {
+	uint32_t N;
+	uint32_t term;
+	uint32_t doc;
+	uint32_t bcount;
+} chunk_head_t;
+
+typedef struct {
 	FILE *in;
 	tupe_t tupe;
 
+	int have_read;
+	chunk_head_t h;
 	chunk_t chunk;
 } ifile_t;
 
 void ifile_init( ifile_t *file, int cap ) {
 	memset( &file->chunk, 0, sizeof(file->chunk));
-
+  memset( &file->h, 0, sizeof(file->h));
+	file->have_read = 0;
 	chunk_alloc( &file->chunk, cap );
 }
 
+void ifile_real_read( ifile_t *file ) {
+	size_t rc = fread( &file->h, sizeof(file->h), 1, file->in );
+
+	uint8_t *cbuffer = malloc( file->h.N * sizeof(uint32_t));
+  fread( cbuffer, file->h.bcount, 1, file->in );
+	streamvbyte_delta_decode( cbuffer, file->chunk.buffer, file->h.N, file->h.doc );
+}
+
+void ifile_real_write( ifile_t *file ) {
+	chunk_head_t h = { .N = chunk_size(&file->chunk), .term = file->h.term, .doc = file->h.doc };
+	uint8_t *cbuffer = malloc( h.N * sizeof(uint32_t));
+	uint32_t csize = streamvbyte_delta_encode( chunk_buffer( &file->chunk ), h.N, cbuffer, h.doc );
+
+	h.bcount = csize;
+	fwrite( &h, sizeof(h), 1, file->in );
+	fwrite( cbuffer, csize, 1, file->in );
+
+	free( cbuffer );
+}
+
 int ifile_read( ifile_t *file ) {
-	if( fread( &file->tupe, sizeof(tupe_t), 1, file->in) == 0 ) {
-		return 0;
+	if(  file->have_read == 0 || chunk_full( &file->chunk ) ) {
+		ifile_real_read( file );
+		file->tupe.term = file->h.term;
+		file->tupe.doc = file->h.doc;
+	} else {
+		file->tupe.doc = chunk_get(&file->chunk);
 	}
+
 	return 1;
 }
 
@@ -69,18 +109,12 @@ void ifile_close( ifile_t *file ) {
 	fclose( file->in );
 }
 
-
-void ifile_real_write( ifile_t *file ) {
-	uint8_t *cbuffer = malloc( chunk_size(&file->chunk) * sizeof(uint32_t));
-	size_t csize = streamvbyte_delta_encode( chunk_buffer( &file->chunk ), chunk_size( &file->chunk), cbuffer, 0 );
-
-	fwrite( &csize, sizeof(csize), 1, file->in );
-	fwrite( cbuffer, csize, 1, file->in );
-
-	free( cbuffer );
-}
-
 void ifile_write( ifile_t *file, tupe_t *tupe ) {
+
+	if( chunk_size( &file->chunk) == 0 ) {
+		file->h.term = tupe->term;
+		file->h.doc = tupe->doc;
+	}
 
 	if( chunk_push( &file->chunk, tupe ) == 1  ) {
 		ifile_real_write( file );
@@ -181,8 +215,18 @@ void test1(char *name, int step) {
 	fclose(a);
 }
 
+int rtest() {
+	ifile_t outs;
+	ifile_init( &outs, 10 );
+	outs.in = fopen("D", "rb");
+	ifile_read( &outs );
+
+	return 0;
+}
+
 int main() {
 
+	rtest();
 	ifile_t outs;
 	ifile_t a[3];
 
