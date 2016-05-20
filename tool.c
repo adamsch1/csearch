@@ -11,6 +11,7 @@ typedef struct {
 	uint32_t doc;
 } tupe_t;
 
+// Growable read/write buffer.  An empty chunk is valid
 typedef struct {
 	uint32_t size;
 	uint32_t cap;
@@ -29,24 +30,30 @@ int chunk_full( chunk_t *chunk ) {
 	return chunk->size == chunk->cap;
 }
 
+void chunk_resize( chunk_t *chunk, size_t size ) {
+	if( size != (size_t)chunk->size ) {
+		// Only resize of size is differnt
+	  chunk->buffer = (uint32_t *)realloc( chunk->buffer, sizeof(uint32_t) * size );
+	  chunk->cap = size;
+	}
+}
+
+// Push value, returns 1 if we are now full
 int chunk_push( chunk_t *chunk, tupe_t *tupe ) {
+	// Allocate if empty
+	if( chunk->cap == 0 ) {
+		chunk_resize( chunk, 10 );
+	}
 	chunk->buffer[ chunk->size++ ] = tupe->doc;
 
-	return chunk->size >= chunk->cap;
+	return chunk->size == chunk->cap;
 }
 
-uint32_t chunk_get( chunk_t *chunk ) {
-	return chunk->buffer[ chunk->size++];
-}
-
-void chunk_alloc( chunk_t *chunk, size_t size ) {
-	chunk->buffer = malloc( sizeof(uint32_t) * size );
-	chunk->cap = size;
-}
-
-void chunk_resize( chunk_t *chunk, size_t size ) {
-	chunk->buffer = (uint32_t *)realloc( chunk->buffer, sizeof(uint32_t) * size );
-	chunk->cap = size;
+// Get next value, returns -1 if we have read all data
+int chunk_get( chunk_t *chunk, uint32_t *value ) {
+	if( chunk_full( chunk ) ) return -1;
+	*value = chunk->buffer[ chunk->size++ ];
+	return 0;
 }
 
 void chunk_free( chunk_t *chunk ) {
@@ -71,13 +78,12 @@ typedef struct {
 
 void ifile_init( ifile_t *file, int cap ) {
 	memset( file, 0, sizeof(*file));
-	chunk_alloc( &file->chunk, cap );
 }
 
 int ifile_real_read( ifile_t *file ) {
 	size_t rc = fread( &file->h, sizeof(file->h), 1, file->in );
 	if( rc == 0 )  {
-		return 0;
+		return -1;
 	}
 	uint8_t *cbuffer = malloc( file->h.N * sizeof(uint32_t));
   fread( cbuffer, file->h.bcount, 1, file->in );
@@ -87,7 +93,7 @@ int ifile_real_read( ifile_t *file ) {
 	streamvbyte_delta_decode( cbuffer, file->chunk.buffer, file->h.N, file->h.doc );
 
 	free(cbuffer);
-	return 1;
+	return 0;
 }
 
 void ifile_real_write( ifile_t *file ) {
@@ -103,15 +109,18 @@ void ifile_real_write( ifile_t *file ) {
 }
 
 int ifile_read( ifile_t *file ) {
-	if(  file->have_read == 0 || chunk_full( &file->chunk ) ) {
-		if( ifile_real_read( file ) == 0 ) {
-		  return 0;
-		}
+
+	if( chunk_get(&file->chunk, &file->tupe.doc ) == 0 )  {
+		return 0;
+	} else if( ifile_real_read( file ) ) {
+		return -1;
+	} else {
 		file->have_read = 1;
 		file->tupe.term = file->h.term;
 		file->tupe.doc = file->h.doc;
-	} else {
-		file->tupe.doc = chunk_get(&file->chunk);
+		// XXX 
+		file->chunk.size++;
+		return 0;
 	}
 
 	return 1;
@@ -156,7 +165,7 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 
 	// Read in initial tuple for each ifile
 	for( k=0; k<nfiles; k++ ) {
-		if( ifile_read( &files[k] ) == 0 ) {
+		if( ifile_read( &files[k] ) ) {
 			// EOF remove file
 			ifile_close( &files[k] );
 			memmove( &files[k], &files[k+1], nfiles-k-1*sizeof(ifile_t));
@@ -175,7 +184,7 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 		ifile_write( outs, &f->tupe );
 
 		// Read next tuple for this file
-		if( ifile_read( f ) == 0 ) {
+		if( ifile_read( f ) ) {
 			// EOF case
 			memcpy(&temp, f, sizeof(*f));
 			// Move above it down one in the array [the delete]
