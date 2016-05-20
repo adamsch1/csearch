@@ -11,7 +11,7 @@ typedef struct {
 	uint32_t doc;
 } tupe_t;
 
-// Growable read/write buffer.  An empty chunk is valid
+// Growable read OR write buffer.  An empty chunk is valid
 typedef struct {
 	uint32_t size;
 	uint32_t cap;
@@ -39,22 +39,29 @@ void chunk_resize( chunk_t *chunk, size_t size ) {
 }
 
 // Push value, returns 1 if we are now full
-int chunk_push( chunk_t *chunk, tupe_t *tupe ) {
+int chunk_push( chunk_t *chunk, uint32_t value ) {
 	// Allocate if empty
 	if( chunk->cap == 0 ) {
 		chunk_resize( chunk, 10 );
 	}
-	chunk->buffer[ chunk->size++ ] = tupe->doc;
+	chunk->buffer[ chunk->size++ ] = value;
 
 	return chunk->size == chunk->cap;
 }
 
+int chunk_get( chunk_t *chunk, uint32_t *off, uint32_t *value ) {
+	if( *off >= chunk->cap ) return -1;
+	*value = chunk->buffer[ (*off)++ ];
+	return 0;
+}
+
 // Get next value, returns -1 if we have read all data
+/*
 int chunk_get( chunk_t *chunk, uint32_t *value ) {
 	if( chunk_full( chunk ) ) return -1;
 	*value = chunk->buffer[ chunk->size++ ];
 	return 0;
-}
+}*/
 
 void chunk_free( chunk_t *chunk ) {
 	free(chunk->buffer);
@@ -74,6 +81,7 @@ typedef struct {
 	int have_read;
 	chunk_head_t h;
 	chunk_t chunk;
+	uint32_t roff;
 } ifile_t;
 
 void ifile_init( ifile_t *file, int cap ) {
@@ -110,7 +118,7 @@ void ifile_real_write( ifile_t *file ) {
 
 int ifile_read( ifile_t *file ) {
 
-	if( chunk_get(&file->chunk, &file->tupe.doc ) == 0 )  {
+	if( chunk_get(&file->chunk, &file->roff, &file->tupe.doc ) == 0 )  {
 		return 0;
 	} else if( ifile_real_read( file ) ) {
 		return -1;
@@ -118,8 +126,7 @@ int ifile_read( ifile_t *file ) {
 		file->have_read = 1;
 		file->tupe.term = file->h.term;
 		file->tupe.doc = file->h.doc;
-		// XXX 
-		file->chunk.size++;
+		file->roff++;
 		return 0;
 	}
 
@@ -138,7 +145,7 @@ void ifile_write( ifile_t *file, tupe_t *tupe ) {
 		file->h.doc = tupe->doc;
 	}
 
-	if( chunk_push( &file->chunk, tupe ) == 1  ) {
+	if( chunk_push( &file->chunk, tupe->doc ) == 1  ) {
 		ifile_real_write( file );
 		file->chunk.size = 0;
 	}
@@ -262,8 +269,26 @@ int rtest() {
 	return 0;
 }
 
+int ctest() {
+	chunk_t c = {0};
+  uint32_t v;
+
+	int rc = chunk_full(&c);
+	assert( rc != 0);
+	chunk_push(&c, 1);
+	assert( rc != 0);
+	chunk_push(&c, 1);
+	chunk_push(&c, 1);
+	chunk_push(&c, 1);
+
+	chunk_full(&c);
+	chunk_free(&c);
+	return 0;
+}
+
 int main() {
 
+	ctest();
 //	rtest();
 	ifile_t outs;
 	ifile_t a[3];
