@@ -40,8 +40,7 @@ static inline void chunk_resize( chunk_t *chunk, size_t size ) {
 
 // Push value, returns 1 if we are now full
 static inline int chunk_push( chunk_t *chunk, uint32_t value ) {
-	// Allocate if empty
-	chunk_resize( chunk, 10 );
+	chunk_resize( chunk, 256 );
 	chunk->buffer[ chunk->size++ ] = value;
 
 	return chunk->size == chunk->cap;
@@ -137,7 +136,11 @@ void ifile_write( ifile_t *file, tupe_t *tupe ) {
 		ifile_real_write( file );
 		file->chunk.size = 0;
 	}
+}
 
+void ifile_flush( ifile_t *file ) {
+	ifile_real_write( file );
+	file->chunk.size = 0;
 }
 
 static inline int compare_ifile( const void *va, const void *vb ) {
@@ -218,6 +221,8 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 		}
 
 	}
+
+	ifile_flush( outs );
 }
 
 
