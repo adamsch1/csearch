@@ -49,6 +49,10 @@ void chunk_resize( chunk_t *chunk, size_t size ) {
 	chunk->cap = size;
 }
 
+void chunk_free( chunk_t *chunk ) {
+	free(chunk->buffer);
+}
+
 typedef struct {
 	uint32_t N;
 	uint32_t term;
@@ -66,9 +70,7 @@ typedef struct {
 } ifile_t;
 
 void ifile_init( ifile_t *file, int cap ) {
-	memset( &file->chunk, 0, sizeof(file->chunk));
-  memset( &file->h, 0, sizeof(file->h));
-	file->have_read = 0;
+	memset( file, 0, sizeof(*file));
 	chunk_alloc( &file->chunk, cap );
 }
 
@@ -84,6 +86,7 @@ int ifile_real_read( ifile_t *file ) {
 
 	streamvbyte_delta_decode( cbuffer, file->chunk.buffer, file->h.N, file->h.doc );
 
+	free(cbuffer);
 	return 1;
 }
 
@@ -116,6 +119,7 @@ int ifile_read( ifile_t *file ) {
 
 void ifile_close( ifile_t *file ) {
 	fclose( file->in );
+	chunk_free( &file->chunk );
 }
 
 void ifile_write( ifile_t *file, tupe_t *tupe ) {
@@ -226,7 +230,7 @@ void test2(char *name, int step) {
 		ifile_write( &outs, &t );
 	}
 	ifile_real_write( &outs );
-	fclose(a);
+	ifile_close( &outs );
 }
 
 void test1(char *name, int step) {
@@ -256,7 +260,6 @@ int main() {
 	ifile_t a[3];
 
 	ifile_init( &outs, 10 );
-	outs.chunk.cap = 10;
 	test2("A", 2);
 	test2("B", 3);
 	test2("C", 4);
