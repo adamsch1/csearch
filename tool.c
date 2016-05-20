@@ -21,21 +21,19 @@ typedef struct {
 	uint32_t *buffer;
 } chunk_t;
 
-uint32_t * chunk_buffer( chunk_t *chunk ) {
+// Get underlying buffer
+static inline uint32_t * chunk_buffer( chunk_t *chunk ) {
 	return chunk->buffer;
 }
 
-int chunk_size( chunk_t *chunk ) {
+// Number of entries written
+static inline int chunk_size( chunk_t *chunk ) {
 	return chunk->size;
 }
 
-int chunk_full( chunk_t *chunk ) {
-	return chunk->size == chunk->cap;
-}
-
 static inline void chunk_resize( chunk_t *chunk, size_t size ) {
-	// Only resize of size is differnt or empty
-	if( size != (size_t)chunk->size || chunk->cap == 0 ) {
+	// Only resize if size is greater or empty
+	if( size > (size_t)chunk->size || chunk->cap == 0 ) {
 	  chunk->buffer = (uint32_t *)realloc( chunk->buffer, sizeof(uint32_t) * size );
 	  chunk->cap = size;
 	}
@@ -51,14 +49,14 @@ static inline int chunk_push( chunk_t *chunk, uint32_t value ) {
 
 // Get value of offset.  Offset is incremented for you.  Returns -1 if you reach capacity
 // otherwise retursn 0 on success
-int chunk_get( chunk_t *chunk, uint32_t *off, uint32_t *value ) {
+static inline int chunk_get( chunk_t *chunk, uint32_t *off, uint32_t *value ) {
 	if( *off >= chunk->cap ) return -1;
 	*value = chunk->buffer[ (*off)++ ];
 	return 0;
 }
 
-void chunk_free( chunk_t *chunk ) {
-	free(chunk->buffer);
+static inline void chunk_free( chunk_t *chunk ) {
+	if( chunk->cap > 0 ) free(chunk->buffer);
 }
 
 typedef struct {
@@ -270,15 +268,11 @@ int rtest() {
 int ctest() {
 	chunk_t c = {0};
 
-	int rc = chunk_full(&c);
-	assert( rc != 0);
 	chunk_push(&c, 1);
-	assert( rc != 0);
 	chunk_push(&c, 1);
 	chunk_push(&c, 1);
 	chunk_push(&c, 1);
 
-	chunk_full(&c);
 	chunk_free(&c);
 	return 0;
 }
