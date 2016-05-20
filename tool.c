@@ -30,20 +30,18 @@ int chunk_full( chunk_t *chunk ) {
 	return chunk->size == chunk->cap;
 }
 
-void chunk_resize( chunk_t *chunk, size_t size ) {
-	if( size != (size_t)chunk->size ) {
-		// Only resize of size is differnt
+static inline void chunk_resize( chunk_t *chunk, size_t size ) {
+	// Only resize of size is differnt or empty
+	if( size != (size_t)chunk->size || chunk->cap == 0 ) {
 	  chunk->buffer = (uint32_t *)realloc( chunk->buffer, sizeof(uint32_t) * size );
 	  chunk->cap = size;
 	}
 }
 
 // Push value, returns 1 if we are now full
-int chunk_push( chunk_t *chunk, uint32_t value ) {
+static inline int chunk_push( chunk_t *chunk, uint32_t value ) {
 	// Allocate if empty
-	if( chunk->cap == 0 ) {
-		chunk_resize( chunk, 10 );
-	}
+	chunk_resize( chunk, 10 );
 	chunk->buffer[ chunk->size++ ] = value;
 
 	return chunk->size == chunk->cap;
@@ -54,14 +52,6 @@ int chunk_get( chunk_t *chunk, uint32_t *off, uint32_t *value ) {
 	*value = chunk->buffer[ (*off)++ ];
 	return 0;
 }
-
-// Get next value, returns -1 if we have read all data
-/*
-int chunk_get( chunk_t *chunk, uint32_t *value ) {
-	if( chunk_full( chunk ) ) return -1;
-	*value = chunk->buffer[ chunk->size++ ];
-	return 0;
-}*/
 
 void chunk_free( chunk_t *chunk ) {
 	free(chunk->buffer);
@@ -84,7 +74,7 @@ typedef struct {
 	uint32_t roff;
 } ifile_t;
 
-void ifile_init( ifile_t *file, int cap ) {
+void ifile_init( ifile_t *file ) {
 	memset( file, 0, sizeof(*file));
 }
 
@@ -236,7 +226,7 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 void test2(char *name, int step) {
 	FILE * a = fopen(name, "wb");
 	ifile_t outs;
-	ifile_init( &outs, 10 );
+	ifile_init( &outs );
 	outs.in = a;
 
 	tupe_t t;
@@ -262,7 +252,7 @@ void test1(char *name, int step) {
 
 int rtest() {
 	ifile_t outs;
-	ifile_init( &outs, 10 );
+	ifile_init( &outs );
 	outs.in = fopen("D", "rb");
 	ifile_read( &outs );
 
@@ -271,7 +261,6 @@ int rtest() {
 
 int ctest() {
 	chunk_t c = {0};
-  uint32_t v;
 
 	int rc = chunk_full(&c);
 	assert( rc != 0);
@@ -293,16 +282,16 @@ int main() {
 	ifile_t outs;
 	ifile_t a[3];
 
-	ifile_init( &outs, 10 );
+	ifile_init( &outs );
 	test2("A", 2);
 	test2("B", 3);
 	test2("C", 4);
 
 	outs.in = fopen("D", "wb");
 
-	ifile_init( &a[0], 10 );
-	ifile_init( &a[1], 10 );
-	ifile_init( &a[2], 10 );
+	ifile_init( &a[0] );
+	ifile_init( &a[1] );
+	ifile_init( &a[2] );
 	a[0].in = fopen("A","rb");
 	a[1].in = fopen("B","rb");
 	a[2].in = fopen("C","rb");
