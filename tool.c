@@ -12,12 +12,6 @@ typedef struct {
 } tupe_t;
 
 typedef struct {
-	uint32_t term;
-	uint32_t doc;
-	uint32_t length;
-} tupe3_t;
-
-typedef struct {
 	uint32_t size;
 	uint32_t cap;
 	uint32_t *buffer;
@@ -50,6 +44,11 @@ void chunk_alloc( chunk_t *chunk, size_t size ) {
 	chunk->cap = size;
 }
 
+void chunk_resize( chunk_t *chunk, size_t size ) {
+	chunk->buffer = (uint32_t *)realloc( chunk->buffer, sizeof(uint32_t) * size );
+	chunk->cap = size;
+}
+
 typedef struct {
 	uint32_t N;
 	uint32_t term;
@@ -73,12 +72,19 @@ void ifile_init( ifile_t *file, int cap ) {
 	chunk_alloc( &file->chunk, cap );
 }
 
-void ifile_real_read( ifile_t *file ) {
+int ifile_real_read( ifile_t *file ) {
 	size_t rc = fread( &file->h, sizeof(file->h), 1, file->in );
-
+	if( rc == 0 )  {
+		return 0;
+	}
 	uint8_t *cbuffer = malloc( file->h.N * sizeof(uint32_t));
   fread( cbuffer, file->h.bcount, 1, file->in );
+
+	chunk_resize( &file->chunk, file->h.N );
+
 	streamvbyte_delta_decode( cbuffer, file->chunk.buffer, file->h.N, file->h.doc );
+
+	return 1;
 }
 
 void ifile_real_write( ifile_t *file ) {
@@ -95,7 +101,10 @@ void ifile_real_write( ifile_t *file ) {
 
 int ifile_read( ifile_t *file ) {
 	if(  file->have_read == 0 || chunk_full( &file->chunk ) ) {
-		ifile_real_read( file );
+		if( ifile_real_read( file ) == 0 ) {
+		  return 0;
+		}
+		file->have_read = 1;
 		file->tupe.term = file->h.term;
 		file->tupe.doc = file->h.doc;
 	} else {
@@ -204,6 +213,22 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 }
 
 
+void test2(char *name, int step) {
+	FILE * a = fopen(name, "wb");
+	ifile_t outs;
+	ifile_init( &outs, 10 );
+	outs.in = a;
+
+	tupe_t t;
+	for( int k=0; k<10; k+=step ) {
+		t.term = 1;
+		t.doc = k;
+		ifile_write( &outs, &t );
+	}
+	ifile_real_write( &outs );
+	fclose(a);
+}
+
 void test1(char *name, int step) {
 	FILE * a = fopen(name, "wb");
 	tupe_t t;
@@ -226,18 +251,21 @@ int rtest() {
 
 int main() {
 
-	rtest();
+//	rtest();
 	ifile_t outs;
 	ifile_t a[3];
 
 	ifile_init( &outs, 10 );
 	outs.chunk.cap = 10;
-	test1("A", 2);
-	test1("B", 3);
-	test1("C", 4);
+	test2("A", 2);
+	test2("B", 3);
+	test2("C", 4);
 
 	outs.in = fopen("D", "wb");
 
+	ifile_init( &a[0], 10 );
+	ifile_init( &a[1], 10 );
+	ifile_init( &a[2], 10 );
 	a[0].in = fopen("A","rb");
 	a[1].in = fopen("B","rb");
 	a[2].in = fopen("C","rb");
