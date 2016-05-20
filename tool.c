@@ -68,7 +68,6 @@ typedef struct {
 	FILE *in;
 	tupe_t tupe;
 
-	int have_read;
 	chunk_head_t h;
 	chunk_t chunk;
 	uint32_t roff;
@@ -113,7 +112,6 @@ int ifile_read( ifile_t *file ) {
 	} else if( ifile_real_read( file ) ) {
 		return -1;
 	} else {
-		file->have_read = 1;
 		file->tupe.term = file->h.term;
 		file->tupe.doc = file->h.doc;
 		file->roff++;
