@@ -13,8 +13,11 @@ typedef struct {
 
 // Growable read OR write buffer.  An empty chunk is valid
 typedef struct {
+	// Offset into buffer when writing
 	uint32_t size;
+	// Amount allocated
 	uint32_t cap;
+	// The buffer
 	uint32_t *buffer;
 } chunk_t;
 
@@ -46,6 +49,8 @@ static inline int chunk_push( chunk_t *chunk, uint32_t value ) {
 	return chunk->size == chunk->cap;
 }
 
+// Get value of offset.  Offset is incremented for you.  Returns -1 if you reach capacity
+// otherwise retursn 0 on success
 int chunk_get( chunk_t *chunk, uint32_t *off, uint32_t *value ) {
 	if( *off >= chunk->cap ) return -1;
 	*value = chunk->buffer[ (*off)++ ];
