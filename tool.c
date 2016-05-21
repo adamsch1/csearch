@@ -21,6 +21,9 @@ typedef struct {
 	uint32_t *buffer;
 } chunk_t;
 
+static inline int read_block( FILE *in, uint32_t *N, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk );
+static inline void write_block( FILE *outs, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk );
+
 // Get underlying buffer
 static inline uint32_t * chunk_buffer( chunk_t *chunk ) {
 	return chunk->buffer;
@@ -64,6 +67,46 @@ static inline void chunk_free( chunk_t *chunk ) {
 	if( chunk->cap > 0 ) free(chunk->buffer);
 }
 
+static inline int read_block( FILE *in, uint32_t *N, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk ) {
+	size_t rc = fread( head, shead, 1, in );
+	if( rc == 0 )  {
+		// Nothering read, EOF
+		return -1;
+	}
+
+	// ALlocate enough data to read in the compressed bytes
+	uint8_t *cbuffer = malloc( *N * sizeof(uint32_t));
+  fread( cbuffer, *bcount, 1, in ); // bcount and N will be pointers intside head
+
+	// Resize our decompressed buffer so it can hold enough data
+	chunk_resize( chunk, *N );
+
+	// Do the varint decoding
+	streamvbyte_delta_decode( cbuffer, chunk->buffer, *N, 0 );
+
+	// Compressed buffer no longer needed
+	free(cbuffer);
+
+	return 0;
+}
+
+static inline void write_block( FILE *outs, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk ) {
+
+	// Allocate enough data for the compressed buffer then compress
+	uint8_t *cbuffer = malloc( chunk_size(chunk) * sizeof(uint32_t));
+	uint32_t csize = streamvbyte_delta_encode( chunk_buffer( chunk ), chunk_size(chunk), cbuffer, 0 );
+
+	// Record number of bytes used in compression, likely a pointer to a field in head
+  *bcount = csize;
+
+	// Finally write the head and the compressed buffer
+	fwrite( head, shead, 1, outs );
+	fwrite( cbuffer, csize, 1, outs );
+
+	// Compressed buffer no longer needed
+	free( cbuffer );
+}
+
 // This is written at the compressed buffer written to disk
 typedef struct {
 	// Number of entries
@@ -91,6 +134,38 @@ typedef struct {
 	uint32_t roff;
 } ifile_t;
 
+
+// Forward document header file on disk
+typedef struct {
+	uint32_t N;
+	uint32_t bcount;
+  uint32_t id;	
+} forward_head_t;
+
+// Forward document object
+typedef struct {
+	forward_head_t h;
+	chunk_t chunk;
+} forward_t;
+
+typedef struct {
+	// Read/write file
+	FILE *in;
+} iforward_t;
+
+// Read next forward doc from index
+int iforward_read( iforward_t *file, forward_t *forward ) {
+	if( read_block( file->in, &forward->h.N, &forward->h.bcount, &forward->h, sizeof(forward->h), &forward->chunk ) ) {
+		return -1;
+	}
+	return 0;
+}
+// Read next forward doc from index
+int iforward_write( iforward_t *file, forward_t *forward ) {
+	write_block( file->in, &forward->h.bcount, &forward->h, sizeof(forward->h), &forward->chunk );
+	return 0;
+}
+
 void ifile_init( ifile_t *file ) {
 	memset( file, 0, sizeof(*file));
 }
@@ -99,45 +174,15 @@ void ifile_init( ifile_t *file ) {
 // chunk_head_t, followed by a varint compressed chunk of data.
 int ifile_real_read( ifile_t *file ) {
 
-	// Read in the header
-	size_t rc = fread( &file->h, sizeof(file->h), 1, file->in );
-	if( rc == 0 )  {
-		// Nothering read, EOF
-		return -1;
-	}
-	// ALlocate enough data to read in the compressed bytes
-	uint8_t *cbuffer = malloc( file->h.N * sizeof(uint32_t));
-  fread( cbuffer, file->h.bcount, 1, file->in );
-
-	// Resize our decompressed buffer so it can hold enough data
-	chunk_resize( &file->chunk, file->h.N );
-
-	// Do the varint decoding
-	streamvbyte_delta_decode( cbuffer, file->chunk.buffer, file->h.N, file->h.doc );
-
-	// Compressed buffer no longer needed
-	free(cbuffer);
-	return 0;
+	return read_block( file->in, &file->h.N, &file->h.bcount, &file->h, sizeof(file->h), &file->chunk );
 }
+
 
 // Write's a chunk to disk.  Format is chunk_head_t followed by varint compressed buffer
 void ifile_real_write( ifile_t *file ) {
 	// Create the chunk_heaad_t object
 	chunk_head_t h = { .N = chunk_size(&file->chunk), .term = file->h.term, .doc = file->h.doc };
-
-	// Allocate enough data for the compressed buffer then compress
-	uint8_t *cbuffer = malloc( h.N * sizeof(uint32_t));
-	uint32_t csize = streamvbyte_delta_encode( chunk_buffer( &file->chunk ), h.N, cbuffer, h.doc );
-
-	// Record number of bytes used in compression
-	h.bcount = csize;
-
-	// Finally write the head and the compressed buffer
-	fwrite( &h, sizeof(h), 1, file->in );
-	fwrite( cbuffer, csize, 1, file->in );
-
-	// Compressed buffer no longer needed
-	free( cbuffer );
+	write_block( file->in, &h.bcount, &h, sizeof(h), &file->chunk );
 }
 
 // Read next tuple (term, doc) from the index.
