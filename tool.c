@@ -31,6 +31,10 @@ static inline int chunk_size( chunk_t *chunk ) {
 	return chunk->size;
 }
 
+static inline void chunk_reset( chunk_t *chunk ) {
+	chunk->size = 0;
+}
+
 static inline void chunk_resize( chunk_t *chunk, size_t size ) {
 	// Only resize if size is greater or empty
 	if( size > (size_t)chunk->size || chunk->cap == 0 ) {
@@ -55,23 +59,35 @@ static inline int chunk_get( chunk_t *chunk, uint32_t *off, uint32_t *value ) {
 	return 0;
 }
 
+// An empty chunk_t object is valid, so check if we have allocated any data before freeing
 static inline void chunk_free( chunk_t *chunk ) {
 	if( chunk->cap > 0 ) free(chunk->buffer);
 }
 
+// This is written at the compressed buffer written to disk
 typedef struct {
+	// Number of entries
 	uint32_t N;
+	// Term that covers all entires
 	uint32_t term;
+	// Initial doc
 	uint32_t doc;
+	// Byte count of compressed data, follows immediatly
 	uint32_t bcount;
 } chunk_head_t;
 
+// This can read or write an index sequentially.  
 typedef struct {
+	// Read/write file
 	FILE *in;
+	// What we read into one unit at a time
 	tupe_t tupe;
 
+	// Most recent chunk header
 	chunk_head_t h;
+	// We write/read here
 	chunk_t chunk;
+	// Offset into chunk if reading
 	uint32_t roff;
 } ifile_t;
 
@@ -79,41 +95,61 @@ void ifile_init( ifile_t *file ) {
 	memset( file, 0, sizeof(*file));
 }
 
+// Read the into our buffer the next chunk from disk.  The format is 
+// chunk_head_t, followed by a varint compressed chunk of data.
 int ifile_real_read( ifile_t *file ) {
+
+	// Read in the header
 	size_t rc = fread( &file->h, sizeof(file->h), 1, file->in );
 	if( rc == 0 )  {
+		// Nothering read, EOF
 		return -1;
 	}
+	// ALlocate enough data to read in the compressed bytes
 	uint8_t *cbuffer = malloc( file->h.N * sizeof(uint32_t));
   fread( cbuffer, file->h.bcount, 1, file->in );
 
+	// Resize our decompressed buffer so it can hold enough data
 	chunk_resize( &file->chunk, file->h.N );
 
+	// Do the varint decoding
 	streamvbyte_delta_decode( cbuffer, file->chunk.buffer, file->h.N, file->h.doc );
 
+	// Compressed buffer no longer needed
 	free(cbuffer);
 	return 0;
 }
 
+// Write's a chunk to disk.  Format is chunk_head_t followed by varint compressed buffer
 void ifile_real_write( ifile_t *file ) {
+	// Create the chunk_heaad_t object
 	chunk_head_t h = { .N = chunk_size(&file->chunk), .term = file->h.term, .doc = file->h.doc };
+
+	// Allocate enough data for the compressed buffer then compress
 	uint8_t *cbuffer = malloc( h.N * sizeof(uint32_t));
 	uint32_t csize = streamvbyte_delta_encode( chunk_buffer( &file->chunk ), h.N, cbuffer, h.doc );
 
+	// Record number of bytes used in compression
 	h.bcount = csize;
+
+	// Finally write the head and the compressed buffer
 	fwrite( &h, sizeof(h), 1, file->in );
 	fwrite( cbuffer, csize, 1, file->in );
 
+	// Compressed buffer no longer needed
 	free( cbuffer );
 }
 
+// Read next tuple (term, doc) from the index.
 int ifile_read( ifile_t *file ) {
 
+	// Get the next doc from the buffer
 	if( chunk_get(&file->chunk, &file->roff, &file->tupe.doc ) == 0 )  {
 		return 0;
-	} else if( ifile_real_read( file ) ) {
+	} else if( ifile_real_read( file ) ) { // Try reading a chunk of buffer is empty or we drained it
 		return -1;
 	} else {
+		// Chunk read, setup initial values
 		file->tupe.term = file->h.term;
 		file->tupe.doc = file->h.doc;
 		file->roff++;
@@ -123,26 +159,36 @@ int ifile_read( ifile_t *file ) {
 	return 1;
 }
 
+// Close file, release memory
 void ifile_close( ifile_t *file ) {
 	fclose( file->in );
 	chunk_free( &file->chunk );
 }
 
+// Attempt to write tupe to disk.  THis will write to our internal buffer first if that's full 
+// the buffer is written to disk and the buffer is reset
 void ifile_write( ifile_t *file, tupe_t *tupe ) {
 
+	// Is our buffer empty?
 	if( chunk_size( &file->chunk) == 0 ) {
+		// Yes, copy term and first doc for when we write to disk.
 		file->h.term = tupe->term;
 		file->h.doc = tupe->doc;
 	}
 
+	// Now copy to our buffer
 	if( chunk_push( &file->chunk, tupe->doc ) == 1  ) {
+		// It's full, empty it to disk
 		ifile_real_write( file );
+		// Reset buffer 
 		file->chunk.size = 0;
 	}
 }
 
+// Write what we have in our buffer to disk
 void ifile_flush( ifile_t *file ) {
 	ifile_real_write( file );
+	// Reset buffer
 	file->chunk.size = 0;
 }
 
@@ -159,26 +205,26 @@ static inline int compare_ifile( const void *va, const void *vb ) {
 	}
 }
 
-static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
+static void merge( ifile_t **files, size_t nfiles, ifile_t *outs ) {
   size_t k;
 
-	ifile_t temp;
+	ifile_t *temp;
 
 	// Read in initial tuple for each ifile
 	for( k=0; k<nfiles; k++ ) {
-		if( ifile_read( &files[k] ) ) {
+		if( ifile_read( files[k] ) ) {
 			// EOF remove file
-			ifile_close( &files[k] );
-			memmove( &files[k], &files[k+1], nfiles-k-1*sizeof(ifile_t));
+			ifile_close( files[k] );
+			memmove( &files[k], &files[k+1], nfiles-k-1*sizeof(ifile_t*));
 			nfiles--;
 		}
 	}
 
 	// Sort files
-	qsort( files, nfiles, sizeof(ifile_t), compare_ifile ); 
+	qsort( *files, nfiles, sizeof(ifile_t *), compare_ifile ); 
 
 	while( nfiles ) {
-		ifile_t *f = &files[0];
+		ifile_t *f = files[0];
 
 		// Write lowest tuple to output
 		printf("%d\n", f->tupe.doc );
@@ -187,13 +233,13 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 		// Read next tuple for this file
 		if( ifile_read( f ) ) {
 			// EOF case
-			memcpy(&temp, f, sizeof(*f));
+			temp = f;
 			// Move above it down one in the array [the delete]
-			memmove( &files[0], &files[1], (nfiles-1)*sizeof(ifile_t));
+			memmove( &files[0], &files[1], (nfiles-1)*sizeof(ifile_t*));
 			nfiles--;
 			// Copy the dude we just deleted to the end of the array
-			memcpy( &files[nfiles], &temp, sizeof(temp));
-			ifile_close( &temp );
+			files[nfiles] = temp;
+			ifile_close( temp );
 		} else if( nfiles == 1 ) {
 			continue;
 		}  else  {
@@ -204,7 +250,7 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 			size_t count_of_smaller_lines;
 
 			while (lo < hi) {
-				int cmp = compare_ifile( &files[0], &files[probe]);
+				int cmp = compare_ifile( files[0], files[probe]);
 				if (cmp < 0 || cmp == 0 )  {
 				  hi = probe;
 				} else {
@@ -216,11 +262,11 @@ static void merge( ifile_t *files, size_t nfiles, ifile_t *outs ) {
 			count_of_smaller_lines = lo - 1;
 
 			// Preserve the one we are moving
-			memcpy(&temp, &files[0], sizeof(temp));
+			temp = files[0];
 			// Copy everything down up to the point of insertion
-			memmove( &files[0], &files[1], count_of_smaller_lines*sizeof(ifile_t));
+			memmove( &files[0], &files[1], count_of_smaller_lines*sizeof(ifile_t*));
 			// Insert or guy
-			memcpy( &files[count_of_smaller_lines], &temp, sizeof(temp));
+			files[count_of_smaller_lines] = temp;
 		}
 
 	}
@@ -299,7 +345,8 @@ int main() {
 	a[2].in = fopen("C","rb");
 
 	printf("OK\n");
-	merge( a, 3, &outs);
+	ifile_t *b[3] = { &a[0], &a[1], &a[2] };;
+	merge( b, 3, &outs);
 	ifile_close(&outs);
 }
 
