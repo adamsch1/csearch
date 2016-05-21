@@ -176,12 +176,18 @@ void ifile_write( ifile_t *file, tupe_t *tupe ) {
 		file->h.doc = tupe->doc;
 	}
 
+	// If term changed start of new run
+	if( tupe->term != file->h.term ) {
+		// It's full, empty it to disk
+		ifile_real_write( file );
+		chunk_reset( &file->chunk );
+	}
+
 	// Now copy to our buffer
 	if( chunk_push( &file->chunk, tupe->doc ) == 1  ) {
 		// It's full, empty it to disk
 		ifile_real_write( file );
-		// Reset buffer 
-		file->chunk.size = 0;
+		chunk_reset( &file->chunk );
 	}
 }
 
@@ -242,7 +248,7 @@ static void merge( ifile_t **files, size_t nfiles, ifile_t *outs ) {
 			ifile_close( temp );
 		} else if( nfiles == 1 ) {
 			continue;
-		}  else  {
+		} else  {
 			// Binary search to see where this file should be inserted as it's tupe changed
 			size_t lo = 1;
 			size_t hi = nfiles;
