@@ -22,7 +22,6 @@ typedef struct {
 } chunk_t;
 
 int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk );
-void write_block( FILE *outs, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk );
 
 // Get underlying buffer
 uint32_t * chunk_buffer( chunk_t *chunk ) {
@@ -93,23 +92,6 @@ uint8_t * compress_block( chunk_t *chunk, uint32_t *bcount ) {
   *bcount = csize;
 
 	return cbuffer;
-}
-
-void write_block( FILE *outs, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk ) {
-
-	// Allocate enough data for the compressed buffer then compress
-	uint8_t *cbuffer = malloc( chunk_size(chunk) * sizeof(uint32_t));
-	uint32_t csize = streamvbyte_delta_encode( chunk_buffer( chunk ), chunk_size(chunk), cbuffer, 0 );
-
-	// Record number of bytes used in compression, likely a pointer to a field in head
-  *bcount = csize;
-
-	// Finally write the head and the compressed buffer
-	fwrite( head, shead, 1, outs );
-	fwrite( cbuffer, csize, 1, outs );
-
-	// Compressed buffer no longer needed
-	free( cbuffer );
 }
 
 // This is written at the compressed buffer written to disk
@@ -289,6 +271,8 @@ static inline int compare_ifile( const void *va, const void *vb ) {
 	}
 }
 
+// Merge multiple sorted ifiles.  This is a O(N*M) operation where M is the numer of 
+// files.
 static void merge( ifile_t **files, size_t nfiles, ifile_t *outs ) {
   size_t k;
 
