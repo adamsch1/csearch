@@ -152,8 +152,14 @@ typedef struct {
 	chunk_t chunk;
 } forward_t;
 
+inline void forward_push_term( forward_t *f, uint32_t term );
+inline void forward_set_id( forward_t *f, uint32_t id );
+
 void forward_push_term( forward_t *f, uint32_t term ) {
 	chunk_push( &f->chunk, term );
+}
+void forward_set_id( forward_t *f, uint32_t id ) {
+	f->h.id = id;
 }
 
 typedef struct {
@@ -178,6 +184,10 @@ int iforward_write( iforward_t *file, forward_t *forward ) {
 	fwrite( cbuff, forward->h.bcount, 1, file->in );
 	free(cbuff);
 	return 0;
+}
+
+void iforward_close( iforward_t *file ) {
+	fclose( file->in );
 }
 
 void ifile_init( ifile_t *file ) {
@@ -402,12 +412,22 @@ int ftest() {
 	outs.in = fopen("E", "wb");
 
 	forward_t doc = {{0},{0}};
-	chunk_push( &doc.chunk, 1);
-	chunk_push( &doc.chunk, 2);
-	chunk_push( &doc.chunk, 3);
-	doc.h.id = 15;
+	forward_push_term( &doc, 1 );
+	forward_push_term( &doc, 2 );
+	forward_push_term( &doc, 3 );
+	forward_push_term( &doc, 4 );
+	forward_push_term( &doc, 5 );
+	forward_set_id( &doc, 15 );
 
 	iforward_write( &outs, &doc );
+	iforward_close( &outs );
+
+	outs.in = fopen("E", "rb");
+	iforward_read( &outs, &doc );
+	assert( doc.h.id == 15 );
+	assert( doc.chunk.buffer[0] == 1 );
+	assert( doc.chunk.buffer[1] == 2 );
+	assert( doc.chunk.size == 5 );
 	return 0;
 }
 
