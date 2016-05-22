@@ -66,6 +66,20 @@ void chunk_free( chunk_t *chunk ) {
 	if( chunk->cap > 0 ) free(chunk->buffer);
 }
 
+// Vint compress chunk assumes entires are sorted in ascending order
+uint8_t * chunk_compress( chunk_t *chunk, uint32_t *bcount ) {
+	assert( chunk->size > 0);
+	// Allocate enough data for the compressed buffer then compress
+	uint8_t *cbuffer = malloc( chunk->size * sizeof(uint32_t));
+	uint32_t csize = streamvbyte_delta_encode( chunk->buffer, chunk->size, cbuffer, 0 );
+
+	// Record number of bytes used in compression, likely a pointer to a field in head
+  *bcount = csize;
+
+	return cbuffer;
+}
+
+
 int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk ) {
 	// ALlocate enough data to read in the compressed bytes
 	uint8_t *cbuffer = malloc( N * sizeof(uint32_t));
@@ -81,17 +95,6 @@ int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk ) {
 	free(cbuffer);
 
 	return 0;
-}
-
-uint8_t * compress_block( chunk_t *chunk, uint32_t *bcount ) {
-	// Allocate enough data for the compressed buffer then compress
-	uint8_t *cbuffer = malloc( chunk_size(chunk) * sizeof(uint32_t));
-	uint32_t csize = streamvbyte_delta_encode( chunk_buffer( chunk ), chunk_size(chunk), cbuffer, 0 );
-
-	// Record number of bytes used in compression, likely a pointer to a field in head
-  *bcount = csize;
-
-	return cbuffer;
 }
 
 // This is written at the compressed buffer written to disk
@@ -161,7 +164,8 @@ int iforward_read( iforward_t *file, forward_t *forward ) {
 }
 
 int iforward_write( iforward_t *file, forward_t *forward ) {
-	uint8_t *cbuff = compress_block( &forward->chunk, &forward->h.bcount );
+	uint8_t *cbuff = chunk_compress( &forward->chunk, &forward->h.bcount );
+	forward->h.N = chunk_size( &forward->chunk );
 	fwrite( &forward->h, sizeof(forward->h), 1, file->in );
 	fwrite( cbuff, forward->h.bcount, 1, file->in );
 	free(cbuff);
@@ -193,7 +197,7 @@ int ifile_real_read( ifile_t *file ) {
 void ifile_real_write( ifile_t *file ) {
 	// Create the chunk_heaad_t object and compress body
 	chunk_head_t h = { .N = chunk_size(&file->chunk), .term = file->h.term, .doc = file->h.doc };
-	uint8_t *cbuff = compress_block( &file->chunk, &h.bcount );
+	uint8_t *cbuff = chunk_compress( &file->chunk, &h.bcount );
 
 	fwrite( &h, sizeof(h), 1, file->in );
 	fwrite( cbuff, h.bcount, 1, file->in );
