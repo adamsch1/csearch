@@ -21,24 +21,24 @@ typedef struct {
 	uint32_t *buffer;
 } chunk_t;
 
-static inline int read_block( FILE *in, uint32_t *N, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk );
-static inline void write_block( FILE *outs, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk );
+int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk );
+void write_block( FILE *outs, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk );
 
 // Get underlying buffer
-static inline uint32_t * chunk_buffer( chunk_t *chunk ) {
+uint32_t * chunk_buffer( chunk_t *chunk ) {
 	return chunk->buffer;
 }
 
 // Number of entries written
-static inline int chunk_size( chunk_t *chunk ) {
+int chunk_size( chunk_t *chunk ) {
 	return chunk->size;
 }
 
-static inline void chunk_reset( chunk_t *chunk ) {
+void chunk_reset( chunk_t *chunk ) {
 	chunk->size = 0;
 }
 
-static inline void chunk_resize( chunk_t *chunk, size_t size ) {
+void chunk_resize( chunk_t *chunk, size_t size ) {
 	// Only resize if size is greater or empty
 	if( size > (size_t)chunk->size || chunk->cap == 0 ) {
 	  chunk->buffer = (uint32_t *)realloc( chunk->buffer, sizeof(uint32_t) * size );
@@ -47,7 +47,7 @@ static inline void chunk_resize( chunk_t *chunk, size_t size ) {
 }
 
 // Push value, returns 1 if we are now full
-static inline int chunk_push( chunk_t *chunk, uint32_t value ) {
+int chunk_push( chunk_t *chunk, uint32_t value ) {
 	chunk_resize( chunk, 256 );
 	chunk->buffer[ chunk->size++ ] = value;
 
@@ -56,33 +56,27 @@ static inline int chunk_push( chunk_t *chunk, uint32_t value ) {
 
 // Get value of offset.  Offset is incremented for you.  Returns -1 if you reach capacity
 // otherwise retursn 0 on success
-static inline int chunk_get( chunk_t *chunk, uint32_t *off, uint32_t *value ) {
+int chunk_get( chunk_t *chunk, uint32_t *off, uint32_t *value ) {
 	if( *off >= chunk->cap ) return -1;
 	*value = chunk->buffer[ (*off)++ ];
 	return 0;
 }
 
 // An empty chunk_t object is valid, so check if we have allocated any data before freeing
-static inline void chunk_free( chunk_t *chunk ) {
+void chunk_free( chunk_t *chunk ) {
 	if( chunk->cap > 0 ) free(chunk->buffer);
 }
 
-static inline int read_block( FILE *in, uint32_t *N, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk ) {
-	size_t rc = fread( head, shead, 1, in );
-	if( rc == 0 )  {
-		// Nothering read, EOF
-		return -1;
-	}
-
+int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk ) {
 	// ALlocate enough data to read in the compressed bytes
-	uint8_t *cbuffer = malloc( *N * sizeof(uint32_t));
-  fread( cbuffer, *bcount, 1, in ); // bcount and N will be pointers intside head
+	uint8_t *cbuffer = malloc( N * sizeof(uint32_t));
+  fread( cbuffer, bcount, 1, in ); // bcount and N will be pointers intside head
 
 	// Resize our decompressed buffer so it can hold enough data
-	chunk_resize( chunk, *N );
+	chunk_resize( chunk, N );
 
 	// Do the varint decoding
-	streamvbyte_delta_decode( cbuffer, chunk->buffer, *N, 0 );
+	streamvbyte_delta_decode( cbuffer, chunk->buffer, N, 0 );
 
 	// Compressed buffer no longer needed
 	free(cbuffer);
@@ -90,7 +84,18 @@ static inline int read_block( FILE *in, uint32_t *N, uint32_t *bcount, void *hea
 	return 0;
 }
 
-static inline void write_block( FILE *outs, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk ) {
+uint8_t * compress_block( chunk_t *chunk, uint32_t *bcount ) {
+	// Allocate enough data for the compressed buffer then compress
+	uint8_t *cbuffer = malloc( chunk_size(chunk) * sizeof(uint32_t));
+	uint32_t csize = streamvbyte_delta_encode( chunk_buffer( chunk ), chunk_size(chunk), cbuffer, 0 );
+
+	// Record number of bytes used in compression, likely a pointer to a field in head
+  *bcount = csize;
+
+	return cbuffer;
+}
+
+void write_block( FILE *outs, uint32_t *bcount, void *head, size_t shead, chunk_t *chunk ) {
 
 	// Allocate enough data for the compressed buffer then compress
 	uint8_t *cbuffer = malloc( chunk_size(chunk) * sizeof(uint32_t));
@@ -134,12 +139,11 @@ typedef struct {
 	uint32_t roff;
 } ifile_t;
 
-
 // Forward document header file on disk
 typedef struct {
 	uint32_t N;
 	uint32_t bcount;
-  uint32_t id;	
+  uint32_t id;
 } forward_head_t;
 
 // Forward document object
@@ -148,6 +152,10 @@ typedef struct {
 	chunk_t chunk;
 } forward_t;
 
+void forward_push_term( forward_t *f, uint32_t term ) {
+	chunk_push( &f->chunk, term );
+}
+
 typedef struct {
 	// Read/write file
 	FILE *in;
@@ -155,14 +163,20 @@ typedef struct {
 
 // Read next forward doc from index
 int iforward_read( iforward_t *file, forward_t *forward ) {
-	if( read_block( file->in, &forward->h.N, &forward->h.bcount, &forward->h, sizeof(forward->h), &forward->chunk ) ) {
+	size_t rc = fread( &forward->h, sizeof(forward->h), 1, file->in );
+	if( rc == 0 )  {
+		// Nothering read, EOF
 		return -1;
 	}
-	return 0;
+
+	return read_block( file->in, forward->h.N, forward->h.bcount, &forward->chunk );
 }
-// Read next forward doc from index
+
 int iforward_write( iforward_t *file, forward_t *forward ) {
-	write_block( file->in, &forward->h.bcount, &forward->h, sizeof(forward->h), &forward->chunk );
+	uint8_t *cbuff = compress_block( &forward->chunk, &forward->h.bcount );
+	fwrite( &forward->h, sizeof(forward->h), 1, file->in );
+	fwrite( cbuff, forward->h.bcount, 1, file->in );
+	free(cbuff);
 	return 0;
 }
 
@@ -173,16 +187,25 @@ void ifile_init( ifile_t *file ) {
 // Read the into our buffer the next chunk from disk.  The format is 
 // chunk_head_t, followed by a varint compressed chunk of data.
 int ifile_real_read( ifile_t *file ) {
+	size_t rc = fread( &file->h, sizeof(file->h), 1, file->in );
+	if( rc == 0 )  {
+		// Nothering read, EOF
+		return -1;
+	}
 
-	return read_block( file->in, &file->h.N, &file->h.bcount, &file->h, sizeof(file->h), &file->chunk );
+	return read_block( file->in, file->h.N, file->h.bcount, &file->chunk );
 }
 
 
 // Write's a chunk to disk.  Format is chunk_head_t followed by varint compressed buffer
 void ifile_real_write( ifile_t *file ) {
-	// Create the chunk_heaad_t object
+	// Create the chunk_heaad_t object and compress body
 	chunk_head_t h = { .N = chunk_size(&file->chunk), .term = file->h.term, .doc = file->h.doc };
-	write_block( file->in, &h.bcount, &h, sizeof(h), &file->chunk );
+	uint8_t *cbuff = compress_block( &file->chunk, &h.bcount );
+
+	fwrite( &h, sizeof(h), 1, file->in );
+	fwrite( cbuff, h.bcount, 1, file->in );
+	free(cbuff);
 }
 
 // Read next tuple (term, doc) from the index.
@@ -374,6 +397,20 @@ int ctest() {
 	return 0;
 }
 
+int ftest() {
+	iforward_t outs;
+	outs.in = fopen("E", "wb");
+
+	forward_t doc = {{0},{0}};
+	chunk_push( &doc.chunk, 1);
+	chunk_push( &doc.chunk, 2);
+	chunk_push( &doc.chunk, 3);
+	doc.h.id = 15;
+
+	iforward_write( &outs, &doc );
+	return 0;
+}
+
 int main() {
 
 	ctest();
@@ -399,6 +436,8 @@ int main() {
 	ifile_t *b[3] = { &a[0], &a[1], &a[2] };;
 	merge( b, 3, &outs);
 	ifile_close(&outs);
+
+	ftest();
 }
 
 
