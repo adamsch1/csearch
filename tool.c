@@ -79,17 +79,19 @@ uint8_t * chunk_compress( chunk_t *chunk, uint32_t *bcount ) {
 	return cbuffer;
 }
 
+void chunk_decompress( chunk_t *chunk, uint8_t *cbuffer, uint32_t N ) {
+	chunk_resize( chunk, N );
+
+	// Do the varint decoding
+	streamvbyte_delta_decode( cbuffer, chunk->buffer, N, 0 );
+}
 
 int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk ) {
 	// ALlocate enough data to read in the compressed bytes
 	uint8_t *cbuffer = malloc( N * sizeof(uint32_t));
   fread( cbuffer, bcount, 1, in ); // bcount and N will be pointers intside head
 
-	// Resize our decompressed buffer so it can hold enough data
-	chunk_resize( chunk, N );
-
-	// Do the varint decoding
-	streamvbyte_delta_decode( cbuffer, chunk->buffer, N, 0 );
+	chunk_decompress( chunk, cbuffer, N );
 
 	// Compressed buffer no longer needed
 	free(cbuffer);
