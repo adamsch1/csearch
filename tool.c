@@ -11,6 +11,43 @@ typedef struct {
 	uint32_t doc;
 } tupe_t;
 
+typedef struct {
+	uint32_t size;
+	uint32_t cap;
+	uint8_t  *buff;
+} buff_t;
+
+static inline int nearest_power( int base, int num ) {
+  int n = base;
+
+  while( n < num ) {
+    n <<= 1;
+	}
+
+  return n;
+}
+
+void buff_grow( buff_t *b, size_t size ) {
+	if( b->size + size >= b->cap ) {
+		b->cap = nearest_power( 1, b->cap + size + 1 );
+		b->buff = realloc( b->buff, b->cap );
+	}
+}
+
+void buff_cat( buff_t *b, char *p ) {
+	if( p == NULL || *p == 0 ) return;
+	size_t len = strlen(p)+1;
+	buff_grow( b, len);
+	memcpy( b->buff+b->size, p, len );
+	b->size += len;
+}
+
+void buff_free( buff_t *b ) {
+	if( b->cap ) {
+		free(b->buff);
+	}
+}
+
 // Growable read OR write buffer.  An empty chunk is valid
 typedef struct {
 	// Offset into buffer when writing
@@ -376,6 +413,19 @@ void test1(char *name, int step) {
 	fclose(a);
 }
 
+int btest() {
+	buff_t b;
+ 
+  memset( &b, 0, sizeof(b));
+
+	for( int k=0; k<100; k++ ) {
+	buff_cat(&b, "DUDE");
+	}
+
+	buff_free(&b);
+	return 0;
+}
+
 int rtest() {
 	ifile_t outs;
 	ifile_init( &outs );
@@ -448,6 +498,7 @@ int main() {
 	ifile_close(&outs);
 
 	ftest();
+	btest();
 }
 
 
