@@ -7,10 +7,10 @@ DEBUG=1
 CXX ?= g++-4.7
 ifeq ($(DEBUG),1)
     CXXFLAGS = -fpic -mavx -std=c++11  -Weffc++ -pedantic -ggdb -DDEBUG=1 -D_GLIBCXX_DEBUG -Wall -Wextra
-    CCFLAGS = -fpic -mavx -std=c99  -pedantic -ggdb -DDEBUG=1 -D_GLIBCXX_DEBUG -Wall -Wextra
+    CCFLAGS = -fpic -mavx -std=c11  -pedantic -ggdb -DDEBUG=1 -D_GLIBCXX_DEBUG -Wall -Wextra
 else
     CXXFLAGS = -fpic -mavx -std=c++11  -Weffc++ -pedantic -O3 -Wall -Wextra
-    CCFLAGS = -fpic -mavx -std=c99 -pedantic -O3 -Wall -Wextra
+    CCFLAGS = -fpic -mavx -std=c11 -pedantic -O3 -Wall -Wextra
 endif #debug
 
 

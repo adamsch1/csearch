@@ -36,7 +36,7 @@ void buff_grow( buff_t *b, size_t size ) {
 
 void buff_cat( buff_t *b, char *p ) {
 	if( p == NULL || *p == 0 ) return;
-	size_t len = strlen(p)+1;
+	size_t len = strlen(p);
 	buff_grow( b, len);
 	memcpy( b->buff+b->size, p, len );
 	b->size += len;
