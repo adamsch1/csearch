@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <string.h>
 #include "streamvbytedelta.h"
+#include <gumbo.h>
 
 typedef struct {
 	uint32_t term;
@@ -17,24 +18,25 @@ typedef struct {
 	uint8_t  *buff;
 } buff_t;
 
-static inline int nearest_power( int base, int num ) {
-  int n = base;
-
-  while( n < num ) {
-    n <<= 1;
-	}
-
-  return n;
+static inline int nearest_power( uint64_t num ) {
+	num--;
+	num |= num >> 1;
+	num |= num >> 2;
+	num |= num >> 4;
+	num |= num >> 8;
+	num |= num >> 16;
+	num |= num >> 32;
+	return ++num;
 }
 
 void buff_grow( buff_t *b, size_t size ) {
 	if( b->size + size >= b->cap ) {
-		b->cap = nearest_power( 1, b->cap + size + 1 );
+		b->cap = nearest_power( b->cap + size + 1 );
 		b->buff = realloc( b->buff, b->cap );
 	}
 }
 
-void buff_cat( buff_t *b, char *p ) {
+void buff_cat( buff_t *b, const char *p ) {
 	if( p == NULL || *p == 0 ) return;
 	size_t len = strlen(p);
 	buff_grow( b, len);
@@ -45,6 +47,31 @@ void buff_cat( buff_t *b, char *p ) {
 void buff_free( buff_t *b ) {
 	if( b->cap ) {
 		free(b->buff);
+	}
+}
+
+
+// Crawl work
+typedef struct {
+	buff_t buff;
+	
+	GumboNode *node;
+} crawl_t;
+
+void crawl_parse( crawl_t *c, GumboNode *node ) {
+
+	if( node->type == GUMBO_NODE_TEXT ) {
+		buff_cat( &c->buff, node->v.text.text );
+	} else if( node->type == GUMBO_NODE_ELEMENT &&
+			node->v.element.tag != GUMBO_TAG_SCRIPT &&
+			node->v.element.tag != GUMBO_TAG_STYLE ) {
+		GumboVector *children = &node->v.element.children;
+		for( uint32_t k=0; k<children->length; ++k ) {
+			if( k > 0 && c->buff.size ) {
+				buff_cat( &c->buff, " ");
+			}
+			crawl_parse( c, (GumboNode*)children->data[k] );
+		}
 	}
 }
 
