@@ -266,6 +266,10 @@ void forward_set_id( forward_t *f, uint32_t id ) {
 	f->h.id = id;
 }
 
+void forward_free( forward_t *f ) {
+	chunk_free(&f->chunk);
+}
+
 typedef struct {
 	// Read/write file
 	FILE *in;
@@ -538,7 +542,7 @@ int ftest() {
 	forward_push_term( &doc, 4 );
 	forward_push_term( &doc, 5 );
 	forward_set_id( &doc, 15 );
-
+	
 	iforward_write( &outs, &doc );
 	iforward_close( &outs );
 
@@ -548,6 +552,7 @@ int ftest() {
 	assert( doc.chunk.buffer[0] == 1 );
 	assert( doc.chunk.buffer[1] == 2 );
 	assert( doc.chunk.size == 5 );
+	forward_free(&doc);
 	return 0;
 }
 
