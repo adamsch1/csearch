@@ -128,6 +128,11 @@ CURLcode crawl_fetch_fetch( crawl_fetch_t *f ) {
 	return res;
 } 
 
+void crawl_fetch_free( crawl_fetch_t *f ) {
+	free( f->url );
+	buff_free( &f->buff );
+}
+
 // Growable read OR write buffer.  An empty chunk is valid
 typedef struct {
 	// Offset into buffer when writing
@@ -560,6 +565,7 @@ void	fetchtest() {
 	crawl_fetch_t f;
 	crawl_fetch_init( &f, "https://www.yahoo.com/");
 	crawl_fetch_fetch( &f );
+	crawl_fetch_free( &f );
 }
 
 int main() {
