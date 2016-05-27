@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <string.h>
+#include <curl/curl.h>
 #include "streamvbytedelta.h"
 #include <gumbo.h>
 
@@ -44,6 +45,14 @@ void buff_cat( buff_t *b, const char *p ) {
 	b->size += len;
 }
 
+void buff_catn( buff_t *b, const char *p, size_t rsize ) {
+	if( p == NULL || *p == 0 ) return;
+	buff_grow( b, rsize);
+	memcpy( b->buff+b->size, p, rsize );
+	b->size += rsize;
+	b->buff[b->size] = 0;
+}
+
 void buff_free( buff_t *b ) {
 	if( b->cap ) {
 		free(b->buff);
@@ -55,14 +64,12 @@ void buff_free( buff_t *b ) {
 typedef struct {
 	buff_t buff;
 
-	struct buf_ring *r;
-
 	GumboOutput *output;
 	GumboNode *node;
 } crawl_t;
 
-void crawl_init( crawl_t *c, struct buf_ring *r ) {
-	c->r = r;
+void crawl_init( crawl_t *c ) {
+	memset( c, 0, sizeof(*c));
 }
 
 void crawl_real_parse( crawl_t *c, GumboNode *node ) {
@@ -87,6 +94,39 @@ void crawl_parse( crawl_t *c, const char *content ) {
 	crawl_real_parse(c, c->output->root);
 	gumbo_destroy_output( &kGumboDefaultOptions, c->output );
 }
+
+
+typedef struct {
+  CURL *curl_handle;
+	char *url;
+
+	buff_t buff;
+} crawl_fetch_t;
+
+
+void crawl_fetch_init( crawl_fetch_t *f, const char *url) {
+	memset( f, 0, sizeof(*f));
+	f->url = strdup(url);
+}
+
+size_t crawl_fetch_data( void *content, size_t size, size_t nmemb, void *userp ) {
+	size_t rsize = size * nmemb;
+	crawl_fetch_t *f = (crawl_fetch_t *)userp;
+	buff_catn( &f->buff, content, rsize );
+	return rsize;
+}
+
+CURLcode crawl_fetch_fetch( crawl_fetch_t *f ) {
+	CURLcode res;
+	f->curl_handle = curl_easy_init();
+  curl_easy_setopt(f->curl_handle, CURLOPT_URL, f->url );
+  curl_easy_setopt(f->curl_handle, CURLOPT_WRITEFUNCTION, crawl_fetch_data);
+  curl_easy_setopt(f->curl_handle, CURLOPT_WRITEDATA, (void *)f);
+  res = curl_easy_perform(f->curl_handle);
+	printf("%s\n", curl_easy_strerror(res));
+  curl_easy_cleanup(f->curl_handle);
+	return res;
+} 
 
 // Growable read OR write buffer.  An empty chunk is valid
 typedef struct {
@@ -511,7 +551,14 @@ int ftest() {
 	return 0;
 }
 
+void	fetchtest() {
+	crawl_fetch_t f;
+	crawl_fetch_init( &f, "https://www.yahoo.com/");
+	crawl_fetch_fetch( &f );
+}
+
 int main() {
+	fetchtest();
 
 	ctest();
 //	rtest();

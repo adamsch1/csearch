@@ -7,7 +7,7 @@ DEBUG=1
 CXX ?= g++-4.7
 ifeq ($(DEBUG),1)
     CXXFLAGS = -fpic -mavx -std=c++11  -Weffc++ -pedantic -ggdb -DDEBUG=1 -D_GLIBCXX_DEBUG -Wall -Wextra
-    CCFLAGS = -fpic -mavx -std=c11  -pedantic -ggdb -DDEBUG=1 -D_GLIBCXX_DEBUG -Wall -Wextra
+    CCFLAGS = -fpic -mavx  -std=c11 -pedantic -ggdb -DDEBUG=1 -D_GLIBCXX_DEBUG -Wall -Wextra
 else
     CXXFLAGS = -fpic -mavx -std=c++11  -Weffc++ -pedantic -O3 -Wall -Wextra
     CCFLAGS = -fpic -mavx -std=c11 -pedantic -O3 -Wall -Wextra
@@ -25,7 +25,7 @@ all: tool
 	echo "please run unit tests by running the unit executable"
 
 tool:  $(HEADERS) tool.c  $(OBJECTS)
-	$(CC) $(CCFLAGS)  -o tool tool.c streamvbytedelta.c streamvbyte.c buf_ring.c $(OBJECTS) -lgumbo
+	$(CC) $(CCFLAGS)  -o tool tool.c streamvbytedelta.c streamvbyte.c buf_ring.c $(OBJECTS) -lgumbo -lcurl
 
 
 clean:
