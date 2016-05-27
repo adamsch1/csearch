@@ -54,11 +54,18 @@ void buff_free( buff_t *b ) {
 // Crawl work
 typedef struct {
 	buff_t buff;
-	
+
+	struct buf_ring *r;
+
+	GumboOutput *output;
 	GumboNode *node;
 } crawl_t;
 
-void crawl_parse( crawl_t *c, GumboNode *node ) {
+void crawl_init( crawl_t *c, struct buf_ring *r ) {
+	c->r = r;
+}
+
+void crawl_real_parse( crawl_t *c, GumboNode *node ) {
 
 	if( node->type == GUMBO_NODE_TEXT ) {
 		buff_cat( &c->buff, node->v.text.text );
@@ -70,9 +77,15 @@ void crawl_parse( crawl_t *c, GumboNode *node ) {
 			if( k > 0 && c->buff.size ) {
 				buff_cat( &c->buff, " ");
 			}
-			crawl_parse( c, (GumboNode*)children->data[k] );
+			crawl_real_parse( c, (GumboNode*)children->data[k] );
 		}
 	}
+}
+
+void crawl_parse( crawl_t *c, const char *content ) {
+	c->output = gumbo_parse( content );
+	crawl_real_parse(c, c->output->root);
+	gumbo_destroy_output( &kGumboDefaultOptions, c->output );
 }
 
 // Growable read OR write buffer.  An empty chunk is valid

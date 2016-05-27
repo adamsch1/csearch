@@ -15,7 +15,7 @@ endif #debug
 
 
 streamvbytedelta.o: streamvbytedelta.c $(HEADERS)
-	  $(CC) $(CFLAGS) -c streamvbytedelta.c -Iinclude   SNORT
+	  $(CC) $(CFLAGS) -c streamvbytedelta.c -Iinclude 
 
 streamvbyte.o: streamvbyte.c $(HEADERS)
 	  $(CC) $(CFLAGS) -c streamvbyte.c -Iinclude  
@@ -25,7 +25,7 @@ all: tool
 	echo "please run unit tests by running the unit executable"
 
 tool:  $(HEADERS) tool.c  $(OBJECTS)
-	$(CC) $(CCFLAGS)  -o tool tool.c streamvbytedelta.c streamvbyte.c $(OBJECTS) 
+	$(CC) $(CCFLAGS)  -o tool tool.c streamvbytedelta.c streamvbyte.c buf_ring.c $(OBJECTS) -lgumbo
 
 
 clean:
