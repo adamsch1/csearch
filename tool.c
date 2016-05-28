@@ -60,19 +60,19 @@ void buff_free( buff_t *b ) {
 }
 
 
-// Crawl work
+// Parse Crawl 
 typedef struct {
 	buff_t buff;
 
 	GumboOutput *output;
 	GumboNode *node;
-} crawl_t;
+} crawl_parse_t;
 
-void crawl_init( crawl_t *c ) {
+void crawl_parse_init( crawl_parse_t *c ) {
 	memset( c, 0, sizeof(*c));
 }
 
-void crawl_real_parse( crawl_t *c, GumboNode *node ) {
+void crawl_parse_real( crawl_parse_t *c, GumboNode *node ) {
 
 	if( node->type == GUMBO_NODE_TEXT ) {
 		buff_cat( &c->buff, node->v.text.text );
@@ -84,18 +84,23 @@ void crawl_real_parse( crawl_t *c, GumboNode *node ) {
 			if( k > 0 && c->buff.size ) {
 				buff_cat( &c->buff, " ");
 			}
-			crawl_real_parse( c, (GumboNode*)children->data[k] );
+			crawl_parse_real( c, (GumboNode*)children->data[k] );
 		}
 	}
 }
 
-void crawl_parse( crawl_t *c, const char *content ) {
-	c->output = gumbo_parse( content );
-	crawl_real_parse(c, c->output->root);
+void crawl_parse_parse( crawl_parse_t *c, uint8_t *content ) {
+	c->output = gumbo_parse( (const char *)content );
+	crawl_parse_real(c, c->output->root);
 	gumbo_destroy_output( &kGumboDefaultOptions, c->output );
 }
 
+void crawl_parse_free( crawl_parse_t *c ) {
+	buff_free( &c->buff );
+}
 
+
+// Fetch web page using CURL
 typedef struct {
   CURL *curl_handle;
 	char *url;
@@ -563,8 +568,14 @@ int ftest() {
 
 void	fetchtest() {
 	crawl_fetch_t f;
+	crawl_parse_t p;
+
 	crawl_fetch_init( &f, "https://www.yahoo.com/");
 	crawl_fetch_fetch( &f );
+
+	crawl_parse_init( &p );
+	crawl_parse_parse( &p, f.buff.buff );
+	crawl_parse_free( &p );
 	crawl_fetch_free( &f );
 }
 

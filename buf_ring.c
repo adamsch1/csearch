@@ -33,7 +33,7 @@
 #include <string.h>
 #include <stdio.h>
 #define powerof2(x) ((((x)-1)&(x))==0)
-
+#include <stdatomic.h>
 #include <pthread.h>
 
 struct buf_ring * buf_ring_alloc(int count) { struct buf_ring *br;
