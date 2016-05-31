@@ -5,8 +5,11 @@
 #include <unistd.h>
 #include <string.h>
 #include <curl/curl.h>
-#include "streamvbytedelta.h"
 #include <gumbo.h>
+#include <unicode/ubrk.h>
+#include <unicode/ustring.h>
+
+#include "streamvbytedelta.h"
 
 typedef struct {
 	uint32_t term;
@@ -59,6 +62,74 @@ void buff_free( buff_t *b ) {
 	}
 }
 
+typedef struct {
+  UChar *str;
+  UBreakIterator *boundary;
+
+  int32_t start;
+  int32_t end;	
+} tokenizer_t;
+
+void tokenizer_init( tokenizer_t *t, const char *input ) {
+  memset( t, 0, sizeof(*t));
+	UErrorCode status = U_ZERO_ERROR;
+
+  t->str = malloc( sizeof(UChar) * strlen(input) );
+  u_uastrcpy(t->str, input);
+
+	t->boundary = ubrk_open(UBRK_WORD, "en_us", t->str, -1, &status );
+}
+
+int tokenizer_next( tokenizer_t *t, char *word, size_t size ) {
+  UChar   savedEndChar;
+  int k;
+
+  // start iterator
+  if( t->end == 0 ) {
+    t->start = ubrk_first(t->boundary);
+  }
+
+  // Find next word
+again:
+  t->end = ubrk_next(t->boundary);
+  if( t->end == UBRK_DONE ) {
+    return -1;
+  }
+
+	// Null terminate
+  savedEndChar = t->str[t->end];
+  t->str[t->end] = 0;
+
+	// Skip unct
+	if( t->end - t->start == 1 && u_ispunct( t->str[t->start] ) ) {
+    t->str[t->end] = savedEndChar;
+    t->start = t->end;
+    goto again;
+	}
+
+	// Skip whitespace
+	for( k=t->start; k<t->end; k++ ) {
+	  if( u_isspace( t->str[k] ) == 1 ) {
+      t->str[t->end] = savedEndChar;
+      t->start = t->end;
+			goto again;
+		}
+  }
+
+	// Copy to C bffer
+  u_austrncpy(word, t->str+t->start, size-1);
+  word[size-1] = 0;
+
+  printf("string[%2d..%2d] \"%s\" %d\n", t->start, t->end-1, word, u_isspace( t->str[t->start])); 
+  t->str[t->end] = savedEndChar;
+  t->start = t->end;
+  return 0;
+}
+
+void tokenizer_free( tokenizer_t *t ) {
+	ubrk_close(t->boundary);
+  free(t->str);
+}
 
 // Parse Crawl 
 typedef struct {
@@ -569,12 +640,20 @@ int ftest() {
 void	fetchtest() {
 	crawl_fetch_t f;
 	crawl_parse_t p;
+	tokenizer_t t;
+  char word[1024];
 
 	crawl_fetch_init( &f, "https://www.yahoo.com/");
 	crawl_fetch_fetch( &f );
 
 	crawl_parse_init( &p );
 	crawl_parse_parse( &p, f.buff.buff );
+
+	tokenizer_init( &t, (char *)p.buff.buff );
+  while( !tokenizer_next( &t, word, sizeof(word) ) ) {
+  }
+  tokenizer_free( &t );
+
 	crawl_parse_free( &p );
 	crawl_fetch_free( &f );
 }
