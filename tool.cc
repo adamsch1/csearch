@@ -2,10 +2,10 @@
 #include <iostream>
 
 
-void test( int step ) {
+void test( std::string name, int step ) {
 	ifile f;
 
-	f.fs.open("A", std::ios::out  | std::ios::binary);
+	f.fs.open(name, std::ios::out  | std::ios::binary);
 
 	tupe t;
 
@@ -19,9 +19,23 @@ void test( int step ) {
 	f.fs.close();
 }
 
+void rtest( std::string name ) {
+	ifile f;
+  tupe t;
+
+	f.fs.open(name, std::ios::in | std::ios::binary );
+	while( f.read( t ) ) {
+		std::cout << "DUDE: " << t.term << " " << t.doc << std::endl;
+	}
+}
+
 int main() {
 	std::cout << "GO" << std::endl;
-	test(1);
+	test("A",2);
+	test("B",3);
+	test("C",4);
+
+	rtest("A");
 
 	chunk c;
 

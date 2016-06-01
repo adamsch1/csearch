@@ -70,10 +70,12 @@ class ifile {
 	}
 
 	bool real_read()  {
+		if( fs.eof() ) return false;
 		fs.read( (char *)&h, sizeof(h) );
 		c.read_block( fs, h.N, h.bcount );
 		it = c.begin();
-		return fs.eof();
+		std::cout  << "EOF: " << fs.eof()  << std::endl;
+		return true;
 	}
 
 public:
@@ -89,13 +91,14 @@ public:
 
 	bool read( tupe& tt) {
 
-		if( it != c.end() && (t.doc=*it)) {
+		if( it != c.end() && (tt.doc=t.doc=*it++)) {
 			return true;
 		} else if( !real_read() ) {
 			return false;
 		} else {
 		  t.term = h.term;
 		  t.doc = h.doc;
+			tt = t;
 			it++;
 		}
 	}
