@@ -64,30 +64,30 @@ class ifile {
 		if( c.size() == 0 ) return;
 		h.N = c.size();
 		auto cbuff = std::unique_ptr<uint8_t>(c.compress( h.bcount ));
-		fs.write( (char *)&h, sizeof(h) );
-		fs.write( (char *)cbuff.get(), h.bcount );	
+		fs->write( (char *)&h, sizeof(h) );
+		fs->write( (char *)cbuff.get(), h.bcount );	
 		std::cout << "SIZE: " << h.bcount << std::endl;
 	}
 
 	// XXX return if gcount() is correct size
 	bool real_read()  {
-		if( fs.eof() ) return false;
-		fs.read( (char *)&h, sizeof(h) );
-		c.read_block( fs, h.N, h.bcount );
+		if( fs->eof() ) return false;
+		fs->read( (char *)&h, sizeof(h) );
+		c.read_block( *fs, h.N, h.bcount );
 		it = c.begin();
-		std::cout  << "EOF: " << fs.eof()  << std::endl;
+		std::cout  << "EOF: " << fs->eof()  << std::endl;
 		return true;
 	}
 
 public:
 	tupe t;
-	std::fstream fs;
+	std::fstream *fs;
 
-	ifile() : c(), h(), capacity(10), it() {}
+	ifile( std::fstream *fs ) : c(), h(), capacity(10), it(), fs(fs) {}
 
 
 	void close() {
-		fs.close();
+		fs->close();
 	}
 
 	void flush() {
@@ -127,8 +127,8 @@ public:
 			real_write();
 			c.clear();
 		}
-
 	}
+
 };
 
 

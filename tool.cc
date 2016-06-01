@@ -73,9 +73,11 @@ void merge( ifile **files, size_t nfiles, ifile& outs ) {
 }
 
 void test( std::string name, int step ) {
-	ifile f;
+	std::fstream fs;
+	fs.open(name, std::ios::out  | std::ios::binary);
+	ifile f(&fs);
 
-	f.fs.open(name, std::ios::out  | std::ios::binary);
+//	f.fs->open(name, std::ios::out  | std::ios::binary);
 
 	tupe t;
 
@@ -89,25 +91,30 @@ void test( std::string name, int step ) {
 }
 
 void rtest( std::string name ) {
-	ifile f;
+	std::fstream fs;
+	fs.open(name, std::ios::out  | std::ios::binary);
+	ifile f(&fs);
   tupe t;
 
-	f.fs.open(name, std::ios::in | std::ios::binary );
 	while( f.read( t ) ) {
 		std::cout << "DUDE: " << t.term << " " << t.doc << std::endl;
 	}
 }
 
 void mtest() {
-	ifile f;
+	std::fstream fs[3];
+	std::fstream ofs;
 
-	ifile a[3];
-	a[0].fs.open("A", std::ios::in  | std::ios::binary);
-	a[1].fs.open("B", std::ios::in | std::ios::binary);
-	a[2].fs.open("C", std::ios::in  | std::ios::binary);
+	fs[0].open("A", std::ios::in  | std::ios::binary);
+	fs[1].open("B", std::ios::in  | std::ios::binary);
+	fs[2].open("C", std::ios::in  | std::ios::binary);
 
-	ifile *b[3] = { &a[0], &a[1], &a[2] };
-	merge( b, 3, f );
+	ofs.open("D", std::ios::out | std::ios::binary);
+
+	ifile outs(&ofs);
+
+	ifile *b[3] = { new ifile(&fs[0]), new ifile(&fs[1]), new ifile(&fs[2]) };
+	merge( b, 3, outs );
 }
 
 int main() {
@@ -118,7 +125,7 @@ int main() {
 
 
 	mtest();
-	rtest("A");
+	//rtest("A");
 
 	chunk c;
 
