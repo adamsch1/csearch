@@ -35,7 +35,7 @@ public:
 		streamvbyte_delta_decode( cbuffer, data(), N, 0 );
 	}
 
-	void read_block( std::ifstream& ifs, uint32_t N, uint32_t bcount )  {
+	void read_block( std::fstream& ifs, uint32_t N, uint32_t bcount )  {
 		auto cbuffer = std::make_shared<uint8_t>( N * sizeof(value_type));
 		ifs.read( (char *)cbuffer.get(), N * sizeof(value_type) );
 
@@ -53,51 +53,71 @@ class ifile {
 		uint32_t bcount;
 	};
 
+
+	chunk::iterator it;
 	chunk c;
 	chunk_head h;
 	tupe t;
+	int capacity;
 
 	void real_write() {
+		if( c.size() == 0 ) return;
+		h.N = c.size();
 		auto cbuff = std::unique_ptr<uint8_t>(c.compress( h.bcount ));
-		ofs.write( &h, sizeof(h) );
-		ofs.write( cbuff.get(), h.bcount );	
+		fs.write( (char *)&h, sizeof(h) );
+		fs.write( (char *)cbuff.get(), h.bcount );	
+		std::cout << "SIZE: " << h.bcount << std::endl;
 	}
 
-	int real_read()  {
-		ofs.read( &h, sizeof(h) );
-		return c.read_block( ofs, h.N, h.bcount );
+	bool real_read()  {
+		fs.read( (char *)&h, sizeof(h) );
+		c.read_block( fs, h.N, h.bcount );
+		it = c.begin();
+		return fs.eof();
 	}
 
 public:
+	std::fstream fs;
 
-	ifile() : c(), h() {}
+	ifile() : c(), h(), capacity(10), it() {}
 
-	void read() {
-		int k;
 
-		if( c[k] ) {
-		} else real_read() {
- 
+	void flush() {
+		real_write();
+		c.clear();
+	}
+
+	bool read( tupe& tt) {
+
+		if( it != c.end() && (t.doc=*it)) {
+			return true;
+		} else if( !real_read() ) {
+			return false;
 		} else {
-			t.term = h.term;
-			t.doc = h.doc;
+		  t.term = h.term;
+		  t.doc = h.doc;
+			it++;
 		}
 	}
 	
 	void write( tupe& t ) {
-		int capacity {10};
 		if( c.size() == 0 ) {
 			h.term = t.term;
 			h.doc = t.doc;
 		}	
 
-		if( t.term != h.term || c.size() == capacity ) {
+		if( t.term != h.term ) {
 			real_write();
 			c.clear();
 			h.term = t.term;
 		}
 
-		c.push_back( t.doc );
+		c.push_back(t.doc);
+		if( c.size() == capacity ) {
+			real_write();
+			c.clear();
+		}
+
 	}
 };
 
