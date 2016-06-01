@@ -15,6 +15,7 @@ extern "C" {
 typedef struct {
 	uint32_t term;
 	uint32_t doc;	
+
 } tupe;
 
 class chunk : public std::vector<uint32_t> {
@@ -57,7 +58,6 @@ class ifile {
 	chunk::iterator it;
 	chunk c;
 	chunk_head h;
-	tupe t;
 	int capacity;
 
 	void real_write() {
@@ -69,6 +69,7 @@ class ifile {
 		std::cout << "SIZE: " << h.bcount << std::endl;
 	}
 
+	// XXX return if gcount() is correct size
 	bool real_read()  {
 		if( fs.eof() ) return false;
 		fs.read( (char *)&h, sizeof(h) );
@@ -79,10 +80,15 @@ class ifile {
 	}
 
 public:
+	tupe t;
 	std::fstream fs;
 
 	ifile() : c(), h(), capacity(10), it() {}
 
+
+	void close() {
+		fs.close();
+	}
 
 	void flush() {
 		real_write();
@@ -100,6 +106,7 @@ public:
 		  t.doc = h.doc;
 			tt = t;
 			it++;
+			return true;
 		}
 	}
 	
@@ -123,7 +130,6 @@ public:
 
 	}
 };
-
 
 
 #endif
