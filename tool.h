@@ -61,11 +61,9 @@ class ifile {
 	void real_write() {
 		if( c.size() == 0 ) return;
 		h.N = c.size();
-		auto cbuff = c.compress( h.bcount );
+		auto cbuff = std::unique_ptr<uint8_t[]>(c.compress( h.bcount ));
 		fs->write( (char *)&h, sizeof(h) );
-		fs->write( (char *)cbuff, h.bcount );	
-		std::cout << "SIZE: " << h.bcount << std::endl;
-		delete[] cbuff;
+		fs->write( (char *)cbuff.get(), h.bcount );	
 	}
 
 	bool real_read()  {
