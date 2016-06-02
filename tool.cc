@@ -92,7 +92,7 @@ void test( std::string name, int step ) {
 
 void rtest( std::string name ) {
 	std::fstream fs;
-	fs.open(name, std::ios::out  | std::ios::binary);
+	fs.open(name, std::ios::in  | std::ios::binary);
 	ifile f(&fs);
   tupe t;
 
@@ -115,6 +115,10 @@ void mtest() {
 
 	ifile *b[3] = { new ifile(&fs[0]), new ifile(&fs[1]), new ifile(&fs[2]) };
 	merge( b, 3, outs );
+
+	delete( b[0] );
+	delete( b[1] );
+	delete( b[2] );
 }
 
 int main() {
@@ -124,6 +128,7 @@ int main() {
 	test("C",4);
 
 
+	rtest("A");
 	mtest();
 	//rtest("A");
 
@@ -140,6 +145,7 @@ int main() {
 
 	chunk d;
 	d.decompress( buff, 3);
+	delete[] buff;
 
 	for( int k=0; k<c.size(); k++ ) {
 		std::cout << d[k] << std::endl;

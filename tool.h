@@ -15,7 +15,6 @@ extern "C" {
 typedef struct {
 	uint32_t term;
 	uint32_t doc;	
-
 } tupe;
 
 class chunk : public std::vector<uint32_t> {
@@ -54,7 +53,6 @@ class ifile {
 		uint32_t bcount;
 	};
 
-
 	chunk::iterator it;
 	chunk c;
 	chunk_head h;
@@ -63,19 +61,18 @@ class ifile {
 	void real_write() {
 		if( c.size() == 0 ) return;
 		h.N = c.size();
-		auto cbuff = std::unique_ptr<uint8_t>(c.compress( h.bcount ));
+		auto cbuff = c.compress( h.bcount );
 		fs->write( (char *)&h, sizeof(h) );
-		fs->write( (char *)cbuff.get(), h.bcount );	
+		fs->write( (char *)cbuff, h.bcount );	
 		std::cout << "SIZE: " << h.bcount << std::endl;
+		delete[] cbuff;
 	}
 
-	// XXX return if gcount() is correct size
 	bool real_read()  {
 		if( fs->eof() ) return false;
 		fs->read( (char *)&h, sizeof(h) );
 		c.read_block( *fs, h.N, h.bcount );
 		it = c.begin();
-		std::cout  << "EOF: " << fs->eof()  << std::endl;
 		return true;
 	}
 
