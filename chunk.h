@@ -12,30 +12,31 @@ extern "C" {
   #include "streamvbytedelta.h"
 }
 
-class chunk : public std::vector<uint32_t> {
+namespace tool {
+	class chunk : public std::vector<uint32_t> {
 
-public:
+	public:
 
-	inline uint8_t * compress( uint32_t& bcount ) {
-		auto cbuffer = new uint8_t [size() * sizeof(value_type)];
-		uint32_t csize = streamvbyte_delta_encode( data(), size(), cbuffer, 0 );
+		inline uint8_t * compress( uint32_t& bcount ) {
+			auto cbuffer = new uint8_t [size() * sizeof(value_type)];
+			uint32_t csize = streamvbyte_delta_encode( data(), size(), cbuffer, 0 );
 
-		bcount = csize;
+			bcount = csize;
 
-		return cbuffer;
-	}	
+			return cbuffer;
+		}	
 
-	inline void decompress( uint8_t *cbuffer, uint32_t N ) {
-		resize( N );
-		streamvbyte_delta_decode( cbuffer, data(), N, 0 );
-	}
+		inline void decompress( uint8_t *cbuffer, uint32_t N ) {
+			resize( N );
+			streamvbyte_delta_decode( cbuffer, data(), N, 0 );
+		}
 
-	inline void read_block( std::fstream& ifs, uint32_t N, uint32_t bcount )  {
-		auto cbuffer = std::make_shared<uint8_t>( N * sizeof(value_type));
-		ifs.read( (char *)cbuffer.get(), N * sizeof(value_type) );
+		inline void read_block( std::fstream& ifs, uint32_t N, uint32_t bcount )  {
+			auto cbuffer = std::make_shared<uint8_t>( N * sizeof(value_type));
+			ifs.read( (char *)cbuffer.get(), N * sizeof(value_type) );
 
-		decompress( cbuffer.get(), N );
-	}
-};
-
+			decompress( cbuffer.get(), N );
+		}
+	};
+}
 #endif

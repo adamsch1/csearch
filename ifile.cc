@@ -6,11 +6,12 @@
 #include <fstream>
 
 #include "tool.h"
-#include "chunk.h"
-#include "document.h"
+
 extern "C" {
   #include "streamvbytedelta.h"
 }
+
+namespace tool {
 
 	void ifile::real_write() {
 		if( c.size() == 0 ) return;
@@ -70,3 +71,4 @@ extern "C" {
 			c.clear();
 		}
 	}
+}

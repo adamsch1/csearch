@@ -14,6 +14,7 @@ extern "C" {
   #include "streamvbytedelta.h"
 }
 
+namespace tool {
 class document {
 
 	using doc_head = struct {
@@ -45,5 +46,5 @@ public:
 		return true;
 	}
 };
-
+}
 #endif

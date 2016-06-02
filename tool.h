@@ -8,18 +8,21 @@
 #include <iostream>
 #include <fstream>
 
-#include "chunk.h"
-#include "document.h"
 
-extern "C" {
-  #include "streamvbytedelta.h"
+namespace tool {
+	typedef struct {
+		uint32_t term;
+		uint32_t doc;	
+	} tupe;
 }
 
-typedef struct {
-	uint32_t term;
-	uint32_t doc;	
-} tupe;
-
+#include "chunk.h"
 #include "ifile.h"
+#include "document.h"
+
+namespace tool {
+	void merge( ifile **files, size_t nfiles, ifile& outs );
+}
+
 
 #endif
