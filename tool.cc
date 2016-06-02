@@ -1,7 +1,8 @@
-#include "tool.h"
 #include <iostream>
 #include <string.h>
 #include <algorithm>
+
+#include "tool.h"
 
 void merge( ifile **files, size_t nfiles, ifile& outs ) {
   size_t k;
