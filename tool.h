@@ -19,9 +19,11 @@ namespace tool {
 #include "chunk.h"
 #include "ifile.h"
 #include "document.h"
+#include "idocument.h"
 
 namespace tool {
 	void merge( ifile **files, size_t nfiles, ifile& outs );
+	void dsort( ifile **files, size_t nfiles, ifile& outs );
 }
 
 
