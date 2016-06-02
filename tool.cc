@@ -90,6 +90,25 @@ void test( std::string name, int step ) {
 
 }
 
+void dtest() {
+	std::fstream fs;
+	fs.open( "EE", std::ios::out  | std::ios::binary);
+
+	document d;
+
+	d.id = 123;
+	d.c.push_back(1);
+	d.c.push_back(2);
+
+	d.write( &fs );
+  fs.close();
+
+	document e;
+	fs.open("EE", std::ios::in | std::ios::binary);
+	e.read( &fs );
+
+}
+
 void rtest( std::string name ) {
 	std::fstream fs;
 	fs.open(name, std::ios::in  | std::ios::binary);
@@ -122,6 +141,7 @@ void mtest() {
 }
 
 int main() {
+	dtest();
 	std::cout << "GO" << std::endl;
 	test("A",2);
 	test("B",3);
