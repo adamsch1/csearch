@@ -41,6 +41,21 @@ void dtest() {
 
 }
 
+void etest() {
+	std::fstream fs;
+	std::fstream fs2;
+	fs.open("EE", std::ios::in | std::ios::binary );
+	fs2.open("NONE", std::ios::out | std::ios::binary );
+
+	tool::ifile outs(&fs2);
+
+	tool::idocument idoc( &fs );
+	tool::idocument *docs[] = { &idoc };
+	tool::dsort(docs, 1, 10, outs);
+
+	outs.flush();
+}
+
 void rtest( std::string name ) {
 	std::fstream fs;
 	fs.open(name, std::ios::in  | std::ios::binary);
@@ -74,6 +89,8 @@ void mtest() {
 
 int main() {
 	dtest();
+	etest();
+
 	std::cout << "GO" << std::endl;
 	test("A",2);
 	test("B",3);

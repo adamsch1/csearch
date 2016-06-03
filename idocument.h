@@ -1,5 +1,5 @@
-#ifndef __TOOL_IFILE__H
-#define __TOOL_IFILE__H
+#ifndef __TOOL_IDOCUMENT__H
+#define __TOOL_IDOCUMENT__H
 
 #include <vector>
 #include <memory>
@@ -17,11 +17,17 @@ namespace tool {
 	public:
 		std::fstream *fs;
 
+		document doc;
+
 		idocument( std::fstream *fs ) : fs(fs) {}
 
 		void close();
+		void flush();
 
-		bool read( document& dd);
+		// Read next document into local copy
+		bool read();
+
+		bool read( document& dd );
 		void write( document& dd);
 	};
 }

@@ -1,39 +1,43 @@
 #include <iostream>
 #include <string.h>
 #include <algorithm>
+#include <unordered_map>
 
 #include "tool.h"
 
 namespace tool {
 
-	void dsort( tool::ifile **files, size_t nfiles, tool::ifile& outs ) {
-		size_t k;
-
-		ifile *temp;
+	void dsort( idocument **files, size_t nfiles, int limit, tool::ifile& outs ) {
+    int k;
+		idocument *temp;
 		tupe tt;
+
+		std::unordered_map<uint32_t, std::vector<uint32_t>> map;
 
 		// Read in initial tuple for each ifile
 		for( k=0; k<nfiles; k++ ) {
-			if( !files[k]->read( tt ) ) {
+			if( !files[k]->read() ) {
 				files[k]->close();
 				memmove( &files[k], &files[k+1], nfiles-k-1*sizeof(ifile*));
 				nfiles--;
 			}
 		}
 
-		std::sort( files, files+nfiles, []( const ifile *a, const ifile *b ) {
-			return a->t.term < b->t.term;
+		std::sort( files, files+nfiles, []( const idocument *a, const idocument *b ) {
+			return a->doc.id < b->doc.id;
 		});
 
 		while( nfiles ) {
-			ifile *f = files[0];
+			idocument *f = files[0];
 
 			// Write lowest tuple to output
-			std::cout << "MERGE: " << f->t.doc << std::endl; 
-			outs.write( f->t );
+			std::cout << "MERGE: " << f->doc.id << std::endl; 
+			for( auto term : f->doc.c  ) {
+				map[ term ].push_back( f->doc.id );
+			}
 
 			// Read next tuple for this file
-			if( !f->read( tt ) )  {
+			if( !f->read() )  {
 				// EOF case
 				temp = f;
 				// Move above it down one in the array [the delete]
@@ -52,7 +56,7 @@ namespace tool {
 				size_t count_of_smaller_lines;
 
 				while (lo < hi) {
-					if ( files[0]->t.doc <= files[probe]->t.doc ) {
+					if ( files[0]->doc.id <= files[probe]->doc.id ) {
 						hi = probe;
 					} else {
 						lo = probe + 1;
@@ -65,7 +69,7 @@ namespace tool {
 				// Preserve the one we are moving
 				temp = files[0];
 				// Copy everything down up to the point of insertion
-				memmove( &files[0], &files[1], count_of_smaller_lines*sizeof(ifile*));
+				memmove( &files[0], &files[1], count_of_smaller_lines*sizeof(idocument*));
 				// Insert or guy
 				files[count_of_smaller_lines] = temp;
 			}

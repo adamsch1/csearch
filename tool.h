@@ -23,7 +23,7 @@ namespace tool {
 
 namespace tool {
 	void merge( ifile **files, size_t nfiles, ifile& outs );
-	void dsort( ifile **files, size_t nfiles, ifile& outs );
+	void dsort( idocument **files, size_t nfiles, int limit, ifile& outs );
 }
 
 

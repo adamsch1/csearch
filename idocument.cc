@@ -20,11 +20,15 @@ namespace tool {
 	void idocument::flush() {
 	}
 
-	bool idocument::read( idocument& dd) {
+	bool idocument::read() {
+		return read( doc );
+	}
+
+	bool idocument::read( document& dd) {
 		return dd.read( fs );
 	}
 	
-	void idocument::write( idocument& dd ) {
+	void idocument::write( document& dd ) {
 		dd.write( fs );
 	}
 }
