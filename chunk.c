@@ -33,13 +33,13 @@ typedef struct {
 
 int chunk_init( chunk_t *chunk ) {
 	chunk->max_size = 2<<22;
-	chunk->capacity = 8;
+	chunk->capacity = 0;
 	chunk->buffer = (uint32_t *)malloc( sizeof(uint32_t) * chunk->capacity );
 }
 
 // Push value, returns 1 if we are now full
 int chunk_push( chunk_t *chunk, uint32_t value ) {
-	assert( chunk->is_compressed == 0 && chunk->capacity > 0 );
+	assert( chunk->is_compressed == 0 );
 
 	if( chunk->size == chunk->capacity ) {
 		if( chunk->capacity == chunk->max_size ) return -1;
