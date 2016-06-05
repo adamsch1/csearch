@@ -24,12 +24,16 @@ typedef struct {
 		uint8_t *cbuff;
 	};
 
+	uint32_t bcount;
+
 	struct list_head list;
 } chunk_t;
 
 typedef struct {
 	struct list_head list;
 } chunk_list_t;
+
+uint8_t * chunk_compress( chunk_t *chunk, uint32_t *bcount );
 
 int chunk_init( chunk_t *chunk ) {
 	chunk->max_size = 2<<22;
@@ -72,13 +76,18 @@ void chunk_free( chunk_t *chunk ) {
 
 int chunk_list_push( chunk_list_t *list, uint32_t doc ) {
 	struct list_head *entry = &list->list;
-	chunk_t *c;
+	chunk_t *c = 0;
 
-	if( entry == NULL || chunk_full( (c=list_entry(entry, chunk_t, list)) ) ) {
+	if( list_empty( entry ) || chunk_full( (c=list_entry(entry->prev, chunk_t, list)) ) ) {
+		if( c ) {
+			chunk_compress( c, &c->bcount ); 
+		}
 		c = malloc(sizeof(*c));
 		memset(c,0,sizeof(*c));
+		chunk_init(c);
 		list_add_tail( &c->list, &list->list );
 	}	
+	c = list_entry( entry->prev, chunk_t, list );
 
 	return chunk_push( c, doc );
 }
@@ -126,7 +135,7 @@ int read_block( FILE *in, uint32_t N, uint32_t bcount, chunk_t *chunk ) {
 	return 0;
 }
 
-int main() {
+int ctest() {
 	chunk_t c = {0};
 	chunk_init(&c);
 	int k;
@@ -141,6 +150,38 @@ int main() {
 	chunk_free( &c );
 	return 0;
 }
+
+int ltest() {
+	chunk_list_t clist = {0};
+  struct list_head *pos;
+
+	int k;
+	uint32_t count =0;
+	uint32_t bcount=0;
+
+	INIT_LIST_HEAD( &clist.list );
+	for( k=0; k<2<<24; k++ ) {
+		count++;
+	  chunk_list_push( &clist, 1 );
+	}
+	for( k=0; k<2<<24; k++ ) {
+		count++;
+	  chunk_list_push( &clist, 1 );
+	}
+
+	k = 0;
+	list_for_each( pos, &clist.list) {
+		k++;
+	}
+	printf("count: %d %d\n",k, count);
+	return 0;
+}
+
+int main() {
+	ctest();
+	ltest();
+}
+
 
 
 
